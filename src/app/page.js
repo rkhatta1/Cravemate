@@ -5,14 +5,15 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export default function LandingPage() {
-  const { status } = useSession();
+  const { status, data: session } = useSession();
   const router = useRouter();
 
   useEffect(() => {
     if (status === "authenticated") {
-      router.push("/home");
+      const hasFinishedOnboarding = session?.user?.hasFinishedOnboarding;
+      router.push(hasFinishedOnboarding ? "/home" : "/onboarding");
     }
-  }, [status, router]);
+  }, [status, router, session]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-orange-50 p-6">
@@ -31,7 +32,7 @@ export default function LandingPage() {
             <p className="text-gray-400">Loading...</p>
           ) : (
             <button
-              onClick={() => signIn("google", { callbackUrl: "/home" })}
+              onClick={() => signIn("google", { callbackUrl: "/" })}
               className="w-full flex items-center justify-center gap-2 bg-black text-white px-4 py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors"
             >
               {/* Simple Google SVG Icon */}

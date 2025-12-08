@@ -8,11 +8,11 @@ const DIETARY_OPTIONS = [
 ];
 
 export default function BasicProfileStep() {
-  const { dietaryPrefs, setDietaryPrefs, setStep, updateProfileData } = useUserStore(); // *Ensure your store has these actions
+  const { profile, dietaryPrefs, setDietaryPrefs, setStep, updateProfile } = useUserStore();
   
   // Local state for immediate inputs
-  const [location, setLocation] = useState("");
-  const [username, setUsername] = useState("");
+  const [location, setLocation] = useState(profile.location || "");
+  const [username, setUsername] = useState(profile.username || "");
 
   const toggleDiet = (option) => {
     if (dietaryPrefs.includes(option)) {
@@ -25,10 +25,7 @@ export default function BasicProfileStep() {
   const handleNext = () => {
     if (!location || !username) return alert("Please fill in required fields");
     
-    // We'll verify username uniqueness later, for now just proceed
-    // You might need to add `updateProfileData` to your store if it's missing, 
-    // or just store these in local component state to submit at the very end.
-    // For now, let's assume we just move to the next step:
+    updateProfile({ username, location });
     setStep(2); 
   };
 

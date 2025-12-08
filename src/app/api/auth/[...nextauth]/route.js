@@ -24,7 +24,7 @@ export const authOptions = {
     },
   },
   pages: {
-    signIn: '/login',      // Custom login page
+    signIn: '/',      // Custom login page matches landing route
     newUser: '/onboarding', // Redirect here after sign up
   },
 };
