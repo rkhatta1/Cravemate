@@ -63,33 +63,41 @@ export default function HomePage() {
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  const handleIncomingMessage = useCallback((payload) => {
-    const normalized = {
-      ...payload,
-      sentAt: payload.sentAt || new Date().toISOString(),
-      sender: {
-        ...payload.sender,
-        name: payload.sender?.name || "Someone",
-        isSelf: false,
-      },
-    };
-
-    setGroups((prev) => {
-      let groupFound = false;
-      const updated = prev.map((group) => {
-        if (group.id !== normalized.groupId) return group;
-        groupFound = true;
-        const messages = [...(group.messages || []), normalized];
-        return {
-          ...group,
-          messages,
-          lastMessage: `${normalized.sender.name}: ${normalized.content}`,
-          updatedAt: normalized.sentAt,
-        };
-      });
-      return groupFound ? updated : prev;
+  const appendMessage = useCallback((groupsList, groupId, message, overrides = {}) => {
+    let groupFound = false;
+    const updated = groupsList.map((group) => {
+      if (group.id !== groupId) return group;
+      groupFound = true;
+      const exists = (group.messages || []).some((m) => m.id === message.id);
+      if (exists) return group;
+      const messages = [...(group.messages || []), message];
+      return {
+        ...group,
+        ...overrides,
+        messages,
+        lastMessage: `${message.sender.name}: ${message.content}`,
+        updatedAt: message.sentAt,
+      };
     });
+    return groupFound ? updated : groupsList;
   }, []);
+
+  const handleIncomingMessage = useCallback(
+    (payload) => {
+      const normalized = {
+        ...payload,
+        sentAt: payload.sentAt || new Date().toISOString(),
+        sender: {
+          ...payload.sender,
+          name: payload.sender?.name || "Someone",
+          isSelf: false,
+        },
+      };
+
+      setGroups((prev) => appendMessage(prev, normalized.groupId, normalized));
+    },
+    [appendMessage]
+  );
 
   const socketRef = useSocket({
     onMessage: handleIncomingMessage,
@@ -135,26 +143,40 @@ export default function HomePage() {
     [groups, activeGroupId]
   );
 
+  const [newGroupModal, setNewGroupModal] = useState({
+    open: false,
+    name: "",
+    location: "",
+    error: "",
+    isSubmitting: false,
+  });
+
   if (status === "loading") {
     return <div className="p-10">Loading session...</div>;
   }
 
+  const openCreateModal = () =>
+    setNewGroupModal({
+      open: true,
+      name: "",
+      location: "",
+      error: "",
+      isSubmitting: false,
+    });
+
+  const closeCreateModal = () =>
+    setNewGroupModal((prev) => ({ ...prev, open: false }));
+
   const handleCreateChat = async () => {
-    const defaultValue = "New Group";
-    const name =
-      typeof window !== "undefined"
-        ? window.prompt("Name your group chat", defaultValue)
-        : defaultValue;
-
-    if (!name || !name.trim()) {
-      return;
-    }
-
+    setNewGroupModal((prev) => ({ ...prev, isSubmitting: true, error: "" }));
     try {
       const response = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({
+          name: newGroupModal.name.trim(),
+          locationContext: newGroupModal.location.trim(),
+        }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -162,11 +184,14 @@ export default function HomePage() {
       }
       setGroups((prev) => [payload.group, ...prev]);
       setActiveGroupId(payload.group.id);
+      closeCreateModal();
     } catch (error) {
-      console.error(error);
-      if (typeof window !== "undefined") {
-        window.alert(error.message || "Failed to create group");
-      }
+      setNewGroupModal((prev) => ({
+        ...prev,
+        error: error.message || "Failed to create group",
+      }));
+    } finally {
+      setNewGroupModal((prev) => ({ ...prev, isSubmitting: false }));
     }
   };
 
@@ -204,7 +229,7 @@ export default function HomePage() {
               Your groups
             </p>
             <button
-              onClick={handleCreateChat}
+              onClick={openCreateModal}
               className="rounded-full bg-black px-3 py-1 text-xs font-semibold text-white hover:bg-gray-800"
             >
               + New
@@ -321,18 +346,7 @@ export default function HomePage() {
 
                       const message = payload.message;
 
-                      setGroups((prev) =>
-                        prev.map((group) =>
-                          group.id === activeGroup.id
-                            ? {
-                                ...group,
-                                messages: [...(group.messages || []), message],
-                                lastMessage: `${message.sender.name}: ${message.content}`,
-                                updatedAt: message.sentAt,
-                              }
-                            : group
-                        )
-                      );
+                      setGroups((prev) => appendMessage(prev, activeGroup.id, message));
 
                       socketRef.current?.emit("chat:send", message);
                     } catch (error) {
@@ -365,6 +379,75 @@ export default function HomePage() {
           )}
         </main>
       </div>
+
+      {newGroupModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="space-y-1">
+              <h3 className="text-xl font-semibold text-gray-900">Start a group chat</h3>
+              <p className="text-sm text-gray-500">
+                Give your chat a name and define where @yelp should look for recommendations.
+              </p>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Group name
+                </label>
+                <input
+                  type="text"
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  placeholder="e.g. Sunday brunch crew"
+                  value={newGroupModal.name}
+                  onChange={(e) =>
+                    setNewGroupModal((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  City / Zip (optional)
+                </label>
+                <input
+                  type="text"
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  placeholder="e.g. Brooklyn"
+                  value={newGroupModal.location}
+                  onChange={(e) =>
+                    setNewGroupModal((prev) => ({ ...prev, location: e.target.value }))
+                  }
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  We’ll default to your profile city if you leave this blank.
+                </p>
+              </div>
+
+              {newGroupModal.error && (
+                <p className="text-sm text-red-500">{newGroupModal.error}</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={closeCreateModal}
+                className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                disabled={newGroupModal.isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateChat}
+                disabled={newGroupModal.isSubmitting || !newGroupModal.name.trim()}
+                className="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {newGroupModal.isSubmitting ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
