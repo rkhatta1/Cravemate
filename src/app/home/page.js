@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useSocket } from "@/hooks/useSocket";
+import { useRouter } from "next/navigation";
 
 const EmptyConversation = () => (
   <div className="flex h-full items-center justify-center text-center text-gray-500">
@@ -57,6 +58,7 @@ const formatTimeLabel = (isoString) => {
 
 export default function HomePage() {
   const { data: session, status } = useSession();
+  const [revalidating, setRevalidating] = useState(true);
   const [groups, setGroups] = useState([]);
   const [activeGroupId, setActiveGroupId] = useState("");
   const [messageInput, setMessageInput] = useState("");
@@ -142,6 +144,22 @@ export default function HomePage() {
     () => groups.find((group) => group.id === activeGroupId) || null,
     [groups, activeGroupId]
   );
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      setRevalidating(false);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session?.user) return;
+
+    if (!session.user.hasFinishedOnboarding) {
+      router.replace("/onboarding");
+    }
+  }, [status, session, router]);
 
   const [newGroupModal, setNewGroupModal] = useState({
     open: false,
@@ -151,7 +169,7 @@ export default function HomePage() {
     isSubmitting: false,
   });
 
-  if (status === "loading") {
+  if (status === "loading" || revalidating) {
     return <div className="p-10">Loading session...</div>;
   }
 

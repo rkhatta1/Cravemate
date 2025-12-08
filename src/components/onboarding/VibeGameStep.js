@@ -1,9 +1,11 @@
 /* eslint-disable react/no-unescaped-entities */
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/store/user-store";
+import { Loader2 } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 const VIBE_TRAITS = {
   cozy: {
@@ -179,7 +181,8 @@ const buildVibeReport = (answers) => {
 };
 
 export default function VibeGameStep() {
-  const router = useRouter();
+  const { data: session, update } = useSession(); 
+  const [isLoading, setIsLoading] = useState(false);
   const {
     profile,
     dietaryPrefs,
@@ -193,6 +196,7 @@ export default function VibeGameStep() {
   const progress = (vibeGameAnswers.length / totalRounds) * 100;
   const isComplete = vibeGameAnswers.length === totalRounds;
   const currentQuestion = QUESTIONS[vibeGameAnswers.length];
+  const router = useRouter();
 
   const vibeReport = useMemo(
     () => buildVibeReport(vibeGameAnswers),
@@ -222,8 +226,27 @@ export default function VibeGameStep() {
 
   const restartGame = () => setVibeAnswers([]);
 
-  const finishOnboarding = () => {
-    router.push("/home");
+  const finishOnboarding = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/user/finish-onboarding", {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        await update({ hasFinishedOnboarding: true });
+        router.push("/home");
+      } else {
+        // Handle error case
+        console.error("Failed to finish onboarding");
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error("Failed to finish onboarding", error);
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -385,9 +408,14 @@ export default function VibeGameStep() {
 
           <button
             onClick={finishOnboarding}
-            className="w-full rounded-2xl bg-black py-4 text-lg font-semibold text-white hover:bg-gray-800 transition-transform active:scale-95"
+            className="w-full rounded-2xl bg-black py-4 text-lg font-semibold text-white hover:bg-gray-800 transition-transform active:scale-95 flex items-center justify-center"
+            disabled={isLoading}
           >
-            Jump into Cravemate →
+            {isLoading ? (
+              <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+            ) : (
+              "Jump into Cravemate →"
+            )}
           </button>
         </div>
       )}

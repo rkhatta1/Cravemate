@@ -44,11 +44,12 @@ model User {
   image         String?
   
   // --- Cravemate Fields ---
-  username          String?  @unique // We'll ask them to set this during onboarding
-  dietaryPrefs      Json?    // ["Vegan", "Gluten-Free"]
-  location          String?  
-  favoritesContext  Json?    // The Cuisine->Dish->Place tree
-  vibeReport        String?  @db.Text 
+  username              String?  @unique // We'll ask them to set this during onboarding
+  hasFinishedOnboarding Boolean  @default(false)
+  dietaryPrefs          Json?    // ["Vegan", "Gluten-Free"]
+  location              String?  
+  favoritesContext      Json?    // The Cuisine->Dish->Place tree
+  vibeReport            String?  @db.Text 
   // ------------------------------------
 
   accounts      Account[]

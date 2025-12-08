@@ -2,6 +2,7 @@
 
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Header from "@/components/landing/Header";
 import Hero from "@/components/landing/Hero";
 import SocialProof from "@/components/landing/SocialProof";
@@ -10,22 +11,24 @@ import FloatingElements from "@/components/landing/FloatingElements";
 export default function LandingPage() {
   const { status, data: session } = useSession();
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleCTAClick = () => {
+    setIsLoading(true);
     if (status === "authenticated") {
-      const hasFinishedOnboarding = session?.user?.hasFinishedOnboarding;
-      router.push(hasFinishedOnboarding ? "/home" : "/onboarding");
-    } else {
-      signIn("google", { callbackUrl: "/onboarding" });
+      // const hasFinishedOnboarding = session?.user?.hasFinishedOnboarding;
+      router.push("/home");
+    } else if (status === "unauthenticated") {
+      signIn("google", { callbackUrl: "/home" });
     }
   };
 
   return (
     <div className="min-h-screen bg-white font-sans selection:bg-red-100 selection:text-red-900 overflow-x-hidden">
-      <Header onSignIn={handleCTAClick} />
+      <Header onSignIn={handleCTAClick} isLoading={isLoading} />
 
       <main className="relative">
-        <Hero onSignIn={handleCTAClick} />
+        <Hero onSignIn={handleCTAClick} isLoading={isLoading} />
 
         {/* Visual Anchor for the "Fold" */}
         <div className="relative z-10 -mt-8 mb-0">
