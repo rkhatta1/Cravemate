@@ -35,8 +35,10 @@ const DISH_IDEAS = {
 
 const emptyDish = { cuisine: "", name: "", restaurant: "" };
 
+const createYelpSlot = () => ({ loading: false, error: "", items: [] });
+
 export default function FavoritesStep() {
-  const { favorites, setFavorites, setStep } = useUserStore();
+  const { favorites, setFavorites, setStep, profile } = useUserStore();
 
   const [selectedCuisines, setSelectedCuisines] = useState(
     favorites.cuisines?.length ? favorites.cuisines : []
@@ -48,10 +50,21 @@ export default function FavoritesStep() {
     return Array.from({ length: 3 }, () => ({ ...emptyDish }));
   });
   const [helperMessage, setHelperMessage] = useState("");
+  const [yelpSlots, setYelpSlots] = useState(() =>
+    Array.from({ length: 3 }, () => createYelpSlot())
+  );
 
   const fireHelper = (msg) => {
     setHelperMessage(msg);
     setTimeout(() => setHelperMessage(""), 2500);
+  };
+
+  const updateYelpSlot = (index, patch) => {
+    setYelpSlots((prev) =>
+      prev.map((slot, slotIndex) =>
+        slotIndex === index ? { ...slot, ...patch } : slot
+      )
+    );
   };
 
   const toggleCuisine = (cuisine) => {
@@ -85,6 +98,56 @@ export default function FavoritesStep() {
         comboIndex === index ? { ...combo, [field]: value } : combo
       )
     );
+    if (field === "cuisine") {
+      updateYelpSlot(index, { items: [] });
+    }
+  };
+
+  const fetchYelpSuggestions = async (index) => {
+    const combo = dishCombos[index];
+    if (!profile.location?.trim()) {
+      fireHelper("Add a city or zip code first to unlock Yelp ideas.");
+      return;
+    }
+    if (!combo.cuisine) {
+      fireHelper("Pick a cuisine for this card before summoning Yelp.");
+      return;
+    }
+
+    updateYelpSlot(index, { loading: true, error: "" });
+
+    try {
+      const response = await fetch("/api/yelp/suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location: profile.location,
+          cuisine: combo.cuisine,
+          dishKeyword: combo.name,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to reach Yelp AI");
+      }
+
+      updateYelpSlot(index, {
+        loading: false,
+        error: "",
+        items: payload?.suggestions || [],
+      });
+    } catch (error) {
+      updateYelpSlot(index, {
+        loading: false,
+        error: error.message || "Could not load Yelp suggestions",
+      });
+    }
+  };
+
+  const applyYelpSuggestion = (index, suggestion) => {
+    updateDish(index, "name", suggestion.dish || "");
+    updateDish(index, "restaurant", suggestion.restaurant || "");
   };
 
   const handleNext = () => {
@@ -140,6 +203,11 @@ export default function FavoritesStep() {
         <p className="text-gray-500">
           Choose the flavors you obsess over, then tell us the exact dish + spot you rave about.
         </p>
+        {!profile.location && (
+          <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/70 p-3 text-sm text-orange-700">
+            Add your city or zip code in Step 1 to unlock Yelp-powered suggestions.
+          </div>
+        )}
       </div>
 
       <section className="space-y-4">
@@ -171,10 +239,18 @@ export default function FavoritesStep() {
             >
               <div className="flex items-center justify-between text-sm text-gray-500 font-medium">
                 Dish #{index + 1}
-                {!combo.cuisine && (
-                  <span className="text-red-500">Select a cuisine</span>
-                )}
+                <button
+                  type="button"
+                  onClick={() => fetchYelpSuggestions(index)}
+                  className="text-xs font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50"
+                  disabled={yelpSlots[index].loading}
+                >
+                  {yelpSlots[index].loading ? "Talking to Yelp..." : "Pull from Yelp"}
+                </button>
               </div>
+              {!combo.cuisine && (
+                <p className="text-xs text-red-500">Select a cuisine first</p>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
@@ -235,6 +311,43 @@ export default function FavoritesStep() {
                       .slice(0, 2)
                       .join(", ")}
                   </span>
+                </div>
+              )}
+
+              {yelpSlots[index].error && (
+                <p className="text-xs text-red-500">{yelpSlots[index].error}</p>
+              )}
+
+              {yelpSlots[index].items.length > 0 && (
+                <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 space-y-3">
+                  <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                    Yelp says try these
+                  </p>
+                  <div className="space-y-2">
+                    {yelpSlots[index].items.map((suggestion) => (
+                      <button
+                        key={suggestion.id}
+                        type="button"
+                        onClick={() => applyYelpSuggestion(index, suggestion)}
+                        className="w-full text-left rounded-xl border border-gray-200 bg-white p-3 hover:border-orange-400 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-gray-800">
+                            {suggestion.restaurant}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {typeof suggestion.rating === "number"
+                              ? `${suggestion.rating.toFixed(1)}★`
+                              : ""}
+                          </p>
+                        </div>
+                        <p className="text-sm text-gray-600">{suggestion.dish}</p>
+                        {suggestion.address && (
+                          <p className="text-xs text-gray-500">{suggestion.address}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
