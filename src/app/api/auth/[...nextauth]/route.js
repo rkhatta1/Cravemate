@@ -6,6 +6,9 @@ import { prisma } from "@/lib/prisma";
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
+  session: {
+    strategy: "jwt",
+  },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -13,12 +16,19 @@ export const authOptions = {
     }),
   ],
   callbacks: {
-    async session({ session, user }) {
-      // Pass the user ID to the client session
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.username = user.username;
+        token.hasFinishedOnboarding = !!user.vibeReport;
+      }
+      return token;
+    },
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id;
-        session.user.username = user.username;
-        session.user.hasFinishedOnboarding = !!user.vibeReport;
+        session.user.id = token.id;
+        session.user.username = token.username;
+        session.user.hasFinishedOnboarding = token.hasFinishedOnboarding;
       }
       return session;
     },

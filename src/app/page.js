@@ -15,6 +15,8 @@ export default function LandingPage() {
     if (status === "authenticated") {
       const hasFinishedOnboarding = session?.user?.hasFinishedOnboarding;
       router.push(hasFinishedOnboarding ? "/home" : "/onboarding");
+    } else {
+      signIn("google", { callbackUrl: "/onboarding" });
     }
   };
 
