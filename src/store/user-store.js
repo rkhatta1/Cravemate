@@ -7,34 +7,50 @@ export const useUserStore = create(
     (set) => ({
       // Onboarding Data
       onboardingStep: 1,
+      profile: {
+        username: "",
+        location: "",
+      },
       dietaryPrefs: [],
       favorites: { 
         cuisines: [], 
-        dishes: [], 
-        restaurants: [] 
+        dishes: [] // [{ cuisine, name, restaurant }]
       },
       vibeGameAnswers: [], // Stores the text reviews they chose
 
       // Actions
       setDietaryPrefs: (prefs) => set({ dietaryPrefs: prefs }),
       
-      updateFavorites: (key, value) => set((state) => ({
+      updateProfile: (data) => set((state) => ({
+        profile: {
+          ...state.profile,
+          ...data,
+        },
+      })),
+
+      setFavorites: (payload) => set((state) => ({
         favorites: {
           ...state.favorites,
-          [key]: [...state.favorites[key], value]
-        }
+          ...payload,
+        },
       })),
 
       addVibeAnswer: (answer) => set((state) => ({
         vibeGameAnswers: [...state.vibeGameAnswers, answer]
       })),
 
+      setVibeAnswers: (answers) => set({ vibeGameAnswers: answers }),
+
       setStep: (step) => set({ onboardingStep: step }),
       
       resetOnboarding: () => set({ 
         onboardingStep: 1, 
+        profile: {
+          username: "",
+          location: "",
+        },
         dietaryPrefs: [], 
-        favorites: { cuisines: [], dishes: [], restaurants: [] }, 
+        favorites: { cuisines: [], dishes: [] }, 
         vibeGameAnswers: [] 
       }),
     }),
