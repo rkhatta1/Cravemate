@@ -1,8 +1,8 @@
 generator client {
-  provider        = "prisma-client" // or `prisma-client-js`
+  provider        = "prisma-client"
   output          = "../src/generated/prisma"
   previewFeatures = ["driverAdapters"]
-  engineType      = "client" // enable Prisma ORM without Rust
+  engineType      = "client"
 }
 
 datasource db {
@@ -10,20 +10,19 @@ datasource db {
 }
 
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String? @db.Text
-  access_token       String? @db.Text
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String? @db.Text
-  session_state      String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -37,28 +36,23 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  
-  // --- Cravemate Fields ---
-  username              String?  @unique // We'll ask them to set this during onboarding
-  hasFinishedOnboarding Boolean  @default(false)
-  dietaryPrefs          Json?    // ["Vegan", "Gluten-Free"]
-  location              String?  
-  favoritesContext      Json?    // The Cuisine->Dish->Place tree
-  vibeReport            String?  @db.Text 
-  // ------------------------------------
-
-  accounts      Account[]
-  sessions      Session[]
-  memberships   GroupMember[]
-  messages      Message[]
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                    String        @id @default(cuid())
+  email                 String?       @unique
+  username              String?       @unique
+  dietaryPrefs          Json?
+  location              String?
+  favoritesContext      Json?
+  vibeReport            String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  emailVerified         DateTime?
+  image                 String?
+  name                  String?
+  hasFinishedOnboarding Boolean       @default(false)
+  accounts              Account[]
+  memberships           GroupMember[]
+  messages              Message[]
+  sessions              Session[]
 }
 
 model VerificationToken {
@@ -70,33 +64,33 @@ model VerificationToken {
 }
 
 model Group {
-  id              String   @id @default(cuid())
+  id              String        @id @default(cuid())
   name            String
-  locationContext String   
-  createdAt       DateTime @default(now())
+  locationContext String
+  createdAt       DateTime      @default(now())
   members         GroupMember[]
   messages        Message[]
 }
 
 model GroupMember {
-  id        String   @id @default(cuid())
-  role      String   @default("MEMBER") 
-  joinedAt  DateTime @default(now())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  groupId   String
-  group     Group    @relation(fields: [groupId], references: [id])
+  id       String   @id @default(cuid())
+  role     String   @default("MEMBER")
+  joinedAt DateTime @default(now())
+  userId   String
+  groupId  String
+  group    Group    @relation(fields: [groupId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, groupId])
 }
 
 model Message {
-  id              String   @id @default(cuid())
-  content         String   @db.Text
-  isYelpResponse  Boolean  @default(false)
-  sentAt          DateTime @default(now())
-  senderId        String?  
-  sender          User?    @relation(fields: [senderId], references: [id])
-  groupId         String
-  group           Group    @relation(fields: [groupId], references: [id])
+  id             String   @id @default(cuid())
+  content        String
+  isYelpResponse Boolean  @default(false)
+  sentAt         DateTime @default(now())
+  senderId       String?
+  groupId        String
+  group          Group    @relation(fields: [groupId], references: [id])
+  sender         User?    @relation(fields: [senderId], references: [id])
 }

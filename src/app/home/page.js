@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useSocket } from "@/hooks/useSocket";
 import { useRouter } from "next/navigation";
+import { parseYelpContent, getMessagePreview } from "@/lib/message-utils";
 
 const EmptyConversation = () => (
   <div className="flex h-full items-center justify-center text-center text-gray-500">
@@ -66,6 +67,9 @@ export default function HomePage() {
   const [loadError, setLoadError] = useState("");
 
   const appendMessage = useCallback((groupsList, groupId, message, overrides = {}) => {
+    const senderName =
+      message.sender?.name || (message.isYelpResponse ? "@yelp" : "Someone");
+    const preview = getMessagePreview(message);
     let groupFound = false;
     const updated = groupsList.map((group) => {
       if (group.id !== groupId) return group;
@@ -77,7 +81,7 @@ export default function HomePage() {
         ...group,
         ...overrides,
         messages,
-        lastMessage: `${message.sender.name}: ${message.content}`,
+        lastMessage: `${senderName}: ${preview}`,
         updatedAt: message.sentAt,
       };
     });
@@ -168,6 +172,18 @@ export default function HomePage() {
     error: "",
     isSubmitting: false,
   });
+  const [inviteModal, setInviteModal] = useState({
+    open: false,
+    email: "",
+    error: "",
+    isSubmitting: false,
+  });
+  const [locationModal, setLocationModal] = useState({
+    open: false,
+    location: "",
+    error: "",
+    isSubmitting: false,
+  });
 
   if (status === "loading" || revalidating) {
     return <div className="p-10">Loading session...</div>;
@@ -186,6 +202,14 @@ export default function HomePage() {
     setNewGroupModal((prev) => ({ ...prev, open: false }));
 
   const handleCreateChat = async () => {
+    if (!newGroupModal.location.trim()) {
+      setNewGroupModal((prev) => ({
+        ...prev,
+        error: "Add a city or ZIP so @yelp knows where to search.",
+      }));
+      return;
+    }
+
     setNewGroupModal((prev) => ({ ...prev, isSubmitting: true, error: "" }));
     try {
       const response = await fetch("/api/groups", {
@@ -210,6 +234,130 @@ export default function HomePage() {
       }));
     } finally {
       setNewGroupModal((prev) => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
+  const requestYelpResponse = async (groupId, query) => {
+    const targetGroup = groups.find((group) => group.id === groupId);
+    if (!targetGroup?.locationContext) {
+      if (typeof window !== "undefined") {
+        window.alert("Add a city or ZIP to this group before asking @yelp.");
+      }
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/groups/${groupId}/yelp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Yelp AI failed to respond");
+      }
+      const yelpMessage = payload.message;
+      setGroups((prev) => appendMessage(prev, groupId, yelpMessage));
+      socketRef.current?.emit("chat:send", yelpMessage);
+    } catch (error) {
+      console.error("Yelp AI error:", error);
+      if (typeof window !== "undefined") {
+        window.alert(error.message || "Yelp AI couldn't respond right now.");
+      }
+    }
+  };
+
+  const openInviteModal = () => {
+    if (!activeGroupId) return;
+    setInviteModal({
+      open: true,
+      email: "",
+      error: "",
+      isSubmitting: false,
+    });
+  };
+
+  const closeInviteModal = () =>
+    setInviteModal((prev) => ({ ...prev, open: false }));
+
+  const handleInvite = async () => {
+    if (!inviteModal.email.trim()) {
+      setInviteModal((prev) => ({ ...prev, error: "Email is required" }));
+      return;
+    }
+
+    setInviteModal((prev) => ({ ...prev, isSubmitting: true, error: "" }));
+    try {
+      const response = await fetch(`/api/groups/${activeGroupId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteModal.email.trim() }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Unable to add member");
+      }
+      setGroups((prev) =>
+        prev.map((group) => (group.id === payload.group.id ? payload.group : group))
+      );
+      closeInviteModal();
+    } catch (error) {
+      setInviteModal((prev) => ({
+        ...prev,
+        error: error.message || "Failed to add member",
+      }));
+    } finally {
+      setInviteModal((prev) => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
+  const openLocationModal = () => {
+    if (!activeGroup) return;
+    setLocationModal({
+      open: true,
+      location: activeGroup.locationContext || "",
+      error: "",
+      isSubmitting: false,
+    });
+  };
+
+  const closeLocationModal = () =>
+    setLocationModal((prev) => ({ ...prev, open: false }));
+
+  const handleLocationSave = async () => {
+    if (!locationModal.location.trim()) {
+      setLocationModal((prev) => ({
+        ...prev,
+        error: "City or ZIP is required.",
+      }));
+      return;
+    }
+
+    setLocationModal((prev) => ({ ...prev, isSubmitting: true, error: "" }));
+    try {
+      const response = await fetch(`/api/groups/${activeGroupId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locationContext: locationModal.location.trim(),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Unable to update location");
+      }
+      setGroups((prev) =>
+        prev.map((group) => (group.id === payload.group.id ? payload.group : group))
+      );
+      setActiveGroupId(payload.group.id);
+      closeLocationModal();
+    } catch (error) {
+      setLocationModal((prev) => ({
+        ...prev,
+        error: error.message || "Failed to update location",
+      }));
+    } finally {
+      setLocationModal((prev) => ({ ...prev, isSubmitting: false }));
     }
   };
 
@@ -276,7 +424,7 @@ export default function HomePage() {
                   <div className="flex w-full items-center justify-between">
                     <p className="font-semibold text-gray-900">{group.name}</p>
                     <span className="text-xs text-gray-400">
-                      {formatTimeLabel(group.updatedAt)}
+                      {group.updatedAt ? formatTimeLabel(group.updatedAt) : "—"}
                     </span>
                   </div>
                   <p className="text-xs text-gray-500">{group.participants.join(", ")}</p>
@@ -298,7 +446,7 @@ export default function HomePage() {
         <main className="flex-1 bg-[url('/whatsapp-bg.png')] bg-cover bg-center">
           {!hasGroups && (
             <EmptyState
-              onCreate={handleCreateChat}
+              onCreate={openCreateModal}
               isLoading={isLoadingGroups}
               error={loadError}
             />
@@ -312,36 +460,111 @@ export default function HomePage() {
                   <p className="text-xs text-gray-500">
                     {activeGroup.participants.length} members · includes @yelp
                   </p>
+                  <p className="text-xs text-gray-400 flex items-center gap-2">
+                    {activeGroup.locationContext
+                      ? `Focused on ${activeGroup.locationContext}`
+                      : "Set a city or ZIP to unlock @yelp"}
+                    <button
+                      type="button"
+                      onClick={openLocationModal}
+                      className="text-orange-600 hover:text-orange-700 font-semibold"
+                    >
+                      Change
+                    </button>
+                  </p>
                 </div>
-                <button className="text-sm font-semibold text-orange-600 hover:text-orange-700">
-                  View context
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={openInviteModal}
+                    className="text-sm font-semibold text-gray-600 hover:text-gray-900"
+                  >
+                    Add friends
+                  </button>
+                  <button className="text-sm font-semibold text-orange-600 hover:text-orange-700">
+                    View context
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 space-y-4 overflow-y-auto bg-gradient-to-b from-white/90 to-white px-6 py-6">
-                {activeGroup.messages?.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`max-w-md rounded-2xl px-4 py-3 text-sm shadow ${
-                      message.sender.isSelf
-                        ? "ml-auto rounded-br-none bg-black text-white"
-                        : "rounded-bl-none bg-white text-gray-800"
-                    }`}
-                  >
-                    {!message.sender.isSelf && (
-                      <p className="font-semibold text-gray-900">{message.sender.name}</p>
-                    )}
-                    <p>{message.content}</p>
-                    <p
-                      className={`mt-1 text-[10px] ${
-                        message.sender.isSelf ? "text-gray-300" : "text-gray-500"
+                {activeGroup.messages?.map((message) => {
+                  if (message.isYelpResponse) {
+                    const payload = parseYelpContent(message.content);
+                    return (
+                      <div
+                        key={message.id}
+                        className="max-w-xl rounded-2xl rounded-bl-none bg-white px-4 py-4 text-sm shadow border border-orange-100"
+                      >
+                        <p className="text-xs uppercase tracking-wide text-orange-600 font-semibold">
+                          @yelp
+                        </p>
+                        <p className="mt-2 text-gray-800 whitespace-pre-line">{payload.text}</p>
+                        {payload.businesses?.length > 0 && (
+                          <div className="mt-4 space-y-3">
+                            {payload.businesses.slice(0, 3).map((biz) => (
+                              <div
+                                key={biz.id || biz.name}
+                                className="rounded-xl border border-gray-200 bg-gray-50/80 p-3 text-sm"
+                              >
+                                <div className="flex justify-between">
+                                  <p className="font-semibold text-gray-900">{biz.name}</p>
+                                  {biz.rating && (
+                                    <span className="text-xs text-gray-600">{biz.rating}★</span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                  {[biz.price, (biz.categories || []).join(", ")]
+                                    .filter(Boolean)
+                                    .join(" • ")}
+                                </p>
+                                {biz.address && (
+                                  <p className="mt-1 text-xs text-gray-500">{biz.address}</p>
+                                )}
+                                {biz.url && (
+                                  <a
+                                    href={biz.url}
+                                    target="_blank"
+                                    className="mt-2 inline-flex text-xs font-semibold text-orange-600 hover:text-orange-700"
+                                    rel="noreferrer"
+                                  >
+                                    View on Yelp →
+                                  </a>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <p className="mt-2 text-[10px] text-gray-500">
+                          @yelp · {formatTimeLabel(message.sentAt)}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={message.id}
+                      className={`max-w-md rounded-2xl px-4 py-3 text-sm shadow ${
+                        message.sender.isSelf
+                          ? "ml-auto rounded-br-none bg-black text-white"
+                          : "rounded-bl-none bg-white text-gray-800"
                       }`}
                     >
-                      {message.sender.isSelf ? "You" : message.sender.name} ·{" "}
-                      {formatTimeLabel(message.sentAt)}
-                    </p>
-                  </div>
-                ))}
+                      {!message.sender.isSelf && (
+                        <p className="font-semibold text-gray-900">{message.sender.name}</p>
+                      )}
+                      <p>{message.content}</p>
+                      <p
+                        className={`mt-1 text-[10px] ${
+                          message.sender.isSelf ? "text-gray-300" : "text-gray-500"
+                        }`}
+                      >
+                        {message.sender.isSelf ? "You" : message.sender.name} ·{" "}
+                        {formatTimeLabel(message.sentAt)}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
 
               <form
@@ -367,6 +590,10 @@ export default function HomePage() {
                       setGroups((prev) => appendMessage(prev, activeGroup.id, message));
 
                       socketRef.current?.emit("chat:send", message);
+
+                      if (message.content.toLowerCase().includes("@yelp")) {
+                        requestYelpResponse(activeGroup.id, message.content);
+                      }
                     } catch (error) {
                       console.error(error);
                       if (typeof window !== "undefined") {
@@ -426,19 +653,19 @@ export default function HomePage() {
 
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  City / Zip (optional)
+                  City / Zip
                 </label>
                 <input
                   type="text"
                   className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                  placeholder="e.g. Brooklyn"
+                  placeholder="e.g. Tempe, AZ"
                   value={newGroupModal.location}
                   onChange={(e) =>
                     setNewGroupModal((prev) => ({ ...prev, location: e.target.value }))
                   }
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  We’ll default to your profile city if you leave this blank.
+                  Required so @yelp knows where to search.
                 </p>
               </div>
 
@@ -457,10 +684,116 @@ export default function HomePage() {
               </button>
               <button
                 onClick={handleCreateChat}
-                disabled={newGroupModal.isSubmitting || !newGroupModal.name.trim()}
+                disabled={
+                  newGroupModal.isSubmitting ||
+                  !newGroupModal.name.trim() ||
+                  !newGroupModal.location.trim()
+                }
                 className="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {newGroupModal.isSubmitting ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {inviteModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="space-y-1">
+              <h3 className="text-xl font-semibold text-gray-900">Add someone to this chat</h3>
+              <p className="text-sm text-gray-500">
+                Enter the email tied to their Cravemate account to drop them into the conversation.
+              </p>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Email address
+                </label>
+                <input
+                  type="email"
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  placeholder="teammate@email.com"
+                  value={inviteModal.email}
+                  onChange={(e) =>
+                    setInviteModal((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                />
+              </div>
+
+              {inviteModal.error && (
+                <p className="text-sm text-red-500">{inviteModal.error}</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={closeInviteModal}
+                className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                disabled={inviteModal.isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInvite}
+                disabled={inviteModal.isSubmitting || !inviteModal.email.trim()}
+                className="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {inviteModal.isSubmitting ? "Adding..." : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {locationModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="space-y-1">
+              <h3 className="text-xl font-semibold text-gray-900">Update group location</h3>
+              <p className="text-sm text-gray-500">
+                Set the city or ZIP that @yelp should use when searching for this group.
+              </p>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  City / Zip
+                </label>
+                <input
+                  type="text"
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  placeholder="e.g. Tempe, AZ"
+                  value={locationModal.location}
+                  onChange={(e) =>
+                    setLocationModal((prev) => ({ ...prev, location: e.target.value }))
+                  }
+                />
+              </div>
+
+              {locationModal.error && (
+                <p className="text-sm text-red-500">{locationModal.error}</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={closeLocationModal}
+                className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                disabled={locationModal.isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLocationSave}
+                disabled={locationModal.isSubmitting || !locationModal.location.trim()}
+                className="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {locationModal.isSubmitting ? "Saving..." : "Save"}
               </button>
             </div>
           </div>

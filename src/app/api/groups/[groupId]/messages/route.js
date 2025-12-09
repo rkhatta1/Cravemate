@@ -2,18 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "../../../auth/[...nextauth]/route";
-
-const toClientMessage = (message, currentUserId) => ({
-  id: message.id,
-  content: message.content,
-  sentAt: message.sentAt,
-  groupId: message.groupId,
-  sender: {
-    id: message.sender?.id || null,
-    name: message.sender?.name || message.sender?.username || "Someone",
-    isSelf: message.senderId === currentUserId,
-  },
-});
+import { toClientMessage } from "@/lib/message-utils";
 
 export async function POST(request, context) {
   const session = await getServerSession(authOptions);

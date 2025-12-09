@@ -2,42 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "../auth/[...nextauth]/route";
-
-const toClientGroup = (group, currentUserId) => {
-  const participants =
-    group.members?.map((member) => {
-      const user = member.user;
-      return user?.name || user?.username || "Friend";
-    }) || [];
-
-  const messages =
-    group.messages
-      ?.sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt))
-      .map((message) => ({
-        id: message.id,
-        content: message.content,
-        sender: {
-          id: message.sender?.id || null,
-          name: message.sender?.name || message.sender?.username || "Someone",
-          isSelf: message.senderId === currentUserId,
-        },
-        sentAt: message.sentAt,
-        groupId: group.id,
-      })) || [];
-
-  const lastMessage = messages[messages.length - 1] || null;
-
-  return {
-    id: group.id,
-    name: group.name,
-    participants,
-    lastMessage: lastMessage
-      ? `${lastMessage.sender.name}: ${lastMessage.content}`
-      : "Say hi to start the chat",
-    updatedAt: lastMessage?.sentAt || group.createdAt,
-    messages,
-  };
-};
+import { toClientGroup } from "@/lib/group-utils";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -110,10 +75,22 @@ export async function POST(request) {
     select: { location: true },
   });
 
+  const resolvedLocation = locationContext || userRecord?.location;
+
+  if (!resolvedLocation) {
+    return NextResponse.json(
+      {
+        error:
+          "Set a city or ZIP for your profile or provide a location to create this group.",
+      },
+      { status: 400 }
+    );
+  }
+
   const group = await prisma.group.create({
     data: {
       name,
-      locationContext: locationContext || userRecord?.location || "Anywhere",
+      locationContext: resolvedLocation,
       members: {
         create: [
           {
