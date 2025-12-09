@@ -327,6 +327,7 @@ export default function HomePage() {
         activeGroupId={activeGroupId}
         onSelectGroup={setActiveGroupId}
         onCreateGroup={openCreateModal}
+        onOpenLeaderboard={() => router.push("/leaderboard")}
         sessionName={session?.user?.name}
         onSignOut={() => signOut({ callbackUrl: "/" })}
         isOpen={sidebarOpen}

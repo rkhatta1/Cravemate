@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, PanelLeft, Search, LogOut } from "lucide-react";
+import { Plus, PanelLeft, Search, LogOut, Trophy } from "lucide-react";
 import { CravemateLogo } from "@/components/landing/Icons";
 
 const Sidebar = ({
@@ -7,6 +7,7 @@ const Sidebar = ({
   activeGroupId,
   onSelectGroup,
   onCreateGroup,
+  onOpenLeaderboard,
   sessionName,
   onSignOut,
   isOpen,
@@ -34,16 +35,31 @@ const Sidebar = ({
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
         <div className="flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-gray-500">
           <span>Your Cravings</span>
-          <button
-            onClick={onCreateGroup}
-            className="rounded p-1 text-gray-600 transition-colors hover:bg-gray-200"
-            title="Start a chat"
-          >
-            <Plus size={14} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onOpenLeaderboard}
+              className="rounded p-1 text-gray-600 transition-colors hover:bg-gray-200"
+              title="Open leaderboard"
+            >
+              <Trophy size={14} />
+            </button>
+            <button
+              onClick={onCreateGroup}
+              className="rounded p-1 text-gray-600 transition-colors hover:bg-gray-200"
+              title="Start a chat"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
 
         <div className="px-3">
+          <button
+            onClick={onOpenLeaderboard}
+            className="mb-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-yelp-red hover:text-yelp-red"
+          >
+            View Leaderboard
+          </button>
           <div className="relative">
             <Search
               size={14}
