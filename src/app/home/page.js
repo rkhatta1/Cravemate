@@ -4,58 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useSocket } from "@/hooks/useSocket";
 import { useRouter } from "next/navigation";
-import { parseYelpContent, getMessagePreview } from "@/lib/message-utils";
-
-const EmptyConversation = () => (
-  <div className="flex h-full items-center justify-center text-center text-gray-500">
-    <div className="max-w-sm space-y-3">
-      <p className="text-lg font-semibold text-gray-700">No chat selected</p>
-      <p className="text-sm">
-        Pick a chat from the sidebar or start a new one to bring @yelp into the conversation.
-      </p>
-    </div>
-  </div>
-);
-
-const EmptyState = ({ onCreate, isLoading, error }) => (
-  <div className="flex h-full items-center justify-center">
-    <div className="text-center space-y-4">
-      <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-orange-50 text-orange-500 text-2xl">
-        💬
-      </div>
-      <div className="space-y-1">
-        <p className="text-xl font-semibold text-gray-800">
-          {error ? "We couldn't load your chats" : "Spin up your first group chat"}
-        </p>
-        <p className="text-gray-500">
-          {isLoading
-            ? "Loading your group chats..."
-            : error || "Add friends, toss @yelp into the mix, and let AI keep dinner plans moving."}
-        </p>
-      </div>
-      {!isLoading && !error && (
-        <button
-          onClick={onCreate}
-          className="rounded-full bg-black px-6 py-3 text-sm font-semibold text-white hover:bg-gray-800"
-        >
-          Start a chat
-        </button>
-      )}
-    </div>
-  </div>
-);
-
-const formatTimeLabel = (isoString) => {
-  if (!isoString) return "";
-  try {
-    return new Date(isoString).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "";
-  }
-};
+import { getMessagePreview } from "@/lib/message-utils";
+import { PlusCircle, Send, MapPin, PanelLeft } from "lucide-react";
+import EmptyState from "@/components/chat/EmptyState";
+import EmptyConversation from "@/components/chat/EmptyConversation";
+import Sidebar from "@/components/chat/Sidebar";
+import ChatMessages from "@/components/chat/ChatMessages";
 
 export default function HomePage() {
   const { data: session, status } = useSession();
@@ -65,6 +19,7 @@ export default function HomePage() {
   const [messageInput, setMessageInput] = useState("");
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const appendMessage = useCallback((groupsList, groupId, message, overrides = {}) => {
     const senderName =
@@ -148,6 +103,10 @@ export default function HomePage() {
     () => groups.find((group) => group.id === activeGroupId) || null,
     [groups, activeGroupId]
   );
+  const activeParticipants = Array.isArray(activeGroup?.participants)
+    ? activeGroup.participants
+    : [];
+  const activeMessages = activeGroup?.messages || [];
   const router = useRouter();
 
   useEffect(() => {
@@ -362,268 +321,163 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f0f2f5]">
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
-        <div>
-          <p className="text-sm uppercase tracking-wide text-gray-400">Cravemate</p>
-          <h1 className="text-xl font-semibold text-gray-900">Chats</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          {session?.user?.image && (
-            <img
-              src={session.user.image}
-              alt="avatar"
-              className="h-10 w-10 rounded-full border border-gray-200 object-cover"
-            />
-          )}
-          <div className="text-sm">
-            <p className="font-semibold text-gray-900">{session?.user?.name}</p>
-            <button
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="text-gray-500 hover:text-gray-800"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="flex h-screen overflow-hidden bg-white">
+      <Sidebar
+        groups={groups}
+        activeGroupId={activeGroupId}
+        onSelectGroup={setActiveGroupId}
+        onCreateGroup={openCreateModal}
+        sessionName={session?.user?.name}
+        onSignOut={() => signOut({ callbackUrl: "/" })}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="w-full max-w-sm border-r border-gray-200 bg-white">
-          <div className="flex items-center justify-between px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Your groups
-            </p>
-            <button
-              onClick={openCreateModal}
-              className="rounded-full bg-black px-3 py-1 text-xs font-semibold text-white hover:bg-gray-800"
-            >
-              + New
-            </button>
-          </div>
-
-          <div className="px-3 pb-3">
-            <input
-              type="search"
-              placeholder="Search chats"
-              className="w-full rounded-full border border-gray-200 px-4 py-2 text-sm focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
-
-          <div className="h-full overflow-y-auto">
-            {groups.map((group) => {
-              const isActive = group.id === activeGroupId;
-              return (
+      <main className="relative flex flex-1 flex-col bg-neutral-50">
+        {!hasGroups && (
+          <EmptyState onCreate={openCreateModal} isLoading={isLoadingGroups} error={loadError} />
+        )}
+        {hasGroups && !activeGroup && <EmptyConversation />}
+        {hasGroups && activeGroup && (
+          <>
+            <div className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 sm:px-6">
+              <div className="flex items-center gap-3">
                 <button
-                  key={group.id}
-                  onClick={() => setActiveGroupId(group.id)}
-                  className={`flex w-full flex-col items-start gap-1 border-b border-gray-100 px-4 py-3 text-left transition ${
-                    isActive ? "bg-orange-50/70" : "hover:bg-gray-50"
+                  onClick={() => setSidebarOpen(true)}
+                  className={`-ml-2 rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 ${
+                    sidebarOpen ? "md:opacity-0 md:pointer-events-none" : ""
                   }`}
                 >
-                  <div className="flex w-full items-center justify-between">
-                    <p className="font-semibold text-gray-900">{group.name}</p>
-                    <span className="text-xs text-gray-400">
-                      {group.updatedAt ? formatTimeLabel(group.updatedAt) : "—"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500">{group.participants.join(", ")}</p>
-                  <p className="line-clamp-1 text-sm text-gray-600">{group.lastMessage}</p>
+                  <PanelLeft size={20} />
                 </button>
-              );
-            })}
-
-            {!groups.length && (
-              <div className="px-4 py-8 text-center text-sm text-gray-500">
-                {isLoadingGroups
-                  ? "Loading chats..."
-                  : loadError || "No chats yet—tap “New” to start one."}
-              </div>
-            )}
-          </div>
-        </aside>
-
-        <main className="flex-1 bg-[url('/whatsapp-bg.png')] bg-cover bg-center">
-          {!hasGroups && (
-            <EmptyState
-              onCreate={openCreateModal}
-              isLoading={isLoadingGroups}
-              error={loadError}
-            />
-          )}
-          {hasGroups && !activeGroup && <EmptyConversation />}
-          {hasGroups && activeGroup && (
-            <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
-                <div>
-                  <p className="text-lg font-semibold text-gray-900">{activeGroup.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {activeGroup.participants.length} members · includes @yelp
-                  </p>
-                  <p className="text-xs text-gray-400 flex items-center gap-2">
-                    {activeGroup.locationContext
-                      ? `Focused on ${activeGroup.locationContext}`
-                      : "Set a city or ZIP to unlock @yelp"}
-                    <button
-                      type="button"
-                      onClick={openLocationModal}
-                      className="text-orange-600 hover:text-orange-700 font-semibold"
-                    >
-                      Change
-                    </button>
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={openInviteModal}
-                    className="text-sm font-semibold text-gray-600 hover:text-gray-900"
-                  >
-                    Add friends
-                  </button>
-                  <button className="text-sm font-semibold text-orange-600 hover:text-orange-700">
-                    View context
-                  </button>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 font-bold text-gray-900">
+                    <span className="flex items-center gap-1">
+                      <span className="text-gray-400">#</span>
+                      {activeGroup.name}
+                    </span>
+                    {activeGroup.locationContext && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-yelp-red/10 px-2 py-1 text-[11px] font-semibold text-yelp-red">
+                        <MapPin size={12} />
+                        {activeGroup.locationContext}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <span>{activeParticipants.length} members · includes @yelp</span>
+                    {!activeGroup.locationContext && (
+                      <button
+                        type="button"
+                        onClick={openLocationModal}
+                        className="font-semibold text-yelp-red hover:text-yelp-dark"
+                      >
+                        Set location
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex-1 space-y-4 overflow-y-auto bg-gradient-to-b from-white/90 to-white px-6 py-6">
-                {activeGroup.messages?.map((message) => {
-                  if (message.isYelpResponse) {
-                    const payload = parseYelpContent(message.content);
-                    return (
-                      <div
-                        key={message.id}
-                        className="max-w-xl rounded-2xl rounded-bl-none bg-white px-4 py-4 text-sm shadow border border-orange-100"
-                      >
-                        <p className="text-xs uppercase tracking-wide text-orange-600 font-semibold">
-                          @yelp
-                        </p>
-                        <p className="mt-2 text-gray-800 whitespace-pre-line">{payload.text}</p>
-                        {payload.businesses?.length > 0 && (
-                          <div className="mt-4 space-y-3">
-                            {payload.businesses.slice(0, 3).map((biz) => (
-                              <div
-                                key={biz.id || biz.name}
-                                className="rounded-xl border border-gray-200 bg-gray-50/80 p-3 text-sm"
-                              >
-                                <div className="flex justify-between">
-                                  <p className="font-semibold text-gray-900">{biz.name}</p>
-                                  {biz.rating && (
-                                    <span className="text-xs text-gray-600">{biz.rating}★</span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-500">
-                                  {[biz.price, (biz.categories || []).join(", ")]
-                                    .filter(Boolean)
-                                    .join(" • ")}
-                                </p>
-                                {biz.address && (
-                                  <p className="mt-1 text-xs text-gray-500">{biz.address}</p>
-                                )}
-                                {biz.url && (
-                                  <a
-                                    href={biz.url}
-                                    target="_blank"
-                                    className="mt-2 inline-flex text-xs font-semibold text-orange-600 hover:text-orange-700"
-                                    rel="noreferrer"
-                                  >
-                                    View on Yelp →
-                                  </a>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <p className="mt-2 text-[10px] text-gray-500">
-                          @yelp · {formatTimeLabel(message.sentAt)}
-                        </p>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={message.id}
-                      className={`max-w-md rounded-2xl px-4 py-3 text-sm shadow ${
-                        message.sender.isSelf
-                          ? "ml-auto rounded-br-none bg-black text-white"
-                          : "rounded-bl-none bg-white text-gray-800"
-                      }`}
-                    >
-                      {!message.sender.isSelf && (
-                        <p className="font-semibold text-gray-900">{message.sender.name}</p>
-                      )}
-                      <p>{message.content}</p>
-                      <p
-                        className={`mt-1 text-[10px] ${
-                          message.sender.isSelf ? "text-gray-300" : "text-gray-500"
-                        }`}
-                      >
-                        {message.sender.isSelf ? "You" : message.sender.name} ·{" "}
-                        {formatTimeLabel(message.sentAt)}
-                      </p>
-                    </div>
-                  );
-                })}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={openInviteModal}
+                  className="rounded-full border border-transparent bg-neutral-100 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-gray-200 hover:bg-neutral-200"
+                >
+                  Add friends
+                </button>
+                <button
+                  onClick={openLocationModal}
+                  className="rounded-full bg-black px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800"
+                >
+                  Location
+                </button>
               </div>
+            </div>
 
-              <form
-                className="flex items-center gap-3 border-t border-gray-200 bg-white px-6 py-4"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!messageInput.trim() || !activeGroup) return;
+            <ChatMessages messages={activeMessages} />
 
-                  const sendMessage = async () => {
-                    try {
-                      const response = await fetch(`/api/groups/${activeGroup.id}/messages`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ content: messageInput.trim() }),
-                      });
-                      const payload = await response.json();
-                      if (!response.ok) {
-                        throw new Error(payload?.error || "Failed to send message");
-                      }
+            <form
+              className="border-t border-gray-100 bg-white p-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!messageInput.trim() || !activeGroup) return;
 
-                      const message = payload.message;
-
-                      setGroups((prev) => appendMessage(prev, activeGroup.id, message));
-
-                      socketRef.current?.emit("chat:send", message);
-
-                      if (message.content.toLowerCase().includes("@yelp")) {
-                        requestYelpResponse(activeGroup.id, message.content);
-                      }
-                    } catch (error) {
-                      console.error(error);
-                      if (typeof window !== "undefined") {
-                        window.alert(error.message || "Failed to send message");
-                      }
+                const sendMessage = async () => {
+                  try {
+                    const response = await fetch(`/api/groups/${activeGroup.id}/messages`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ content: messageInput.trim() }),
+                    });
+                    const payload = await response.json();
+                    if (!response.ok) {
+                      throw new Error(payload?.error || "Failed to send message");
                     }
-                  };
 
-                  sendMessage();
-                  setMessageInput("");
-                }}
-              >
+                    const message = payload.message;
+
+                    setGroups((prev) => appendMessage(prev, activeGroup.id, message));
+
+                    socketRef.current?.emit("chat:send", message);
+
+                    if (message.content.toLowerCase().includes("@yelp")) {
+                      requestYelpResponse(activeGroup.id, message.content);
+                    }
+                  } catch (error) {
+                    console.error(error);
+                    if (typeof window !== "undefined") {
+                      window.alert(error.message || "Failed to send message");
+                    }
+                  }
+                };
+
+                sendMessage();
+                setMessageInput("");
+              }}
+            >
+              <div className="mx-auto flex max-w-4xl items-end gap-2 rounded-xl border border-gray-200 bg-neutral-50 px-2 py-2 shadow-sm transition-all focus-within:border-neutral-300 focus-within:ring-2 focus-within:ring-neutral-100">
+                <button
+                  type="button"
+                  className="shrink-0 rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
+                >
+                  <PlusCircle size={20} />
+                </button>
                 <input
                   type="text"
                   placeholder='Message... tip: prefix with "@yelp" to ask for help'
-                  className="flex-1 rounded-full border border-gray-200 px-5 py-3 text-sm focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
+                  className="w-full border-0 bg-transparent p-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-0"
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                 />
-                <button
-                  type="submit"
-                  className="rounded-full bg-black px-5 py-3 text-sm font-semibold text-white hover:bg-gray-800"
-                >
-                  Send
-                </button>
-              </form>
-            </div>
-          )}
-        </main>
-      </div>
+                <div className="flex items-center gap-1 pb-1">
+                  <button
+                    type="submit"
+                    disabled={!messageInput.trim()}
+                    className={`rounded-lg p-2 transition-all ${
+                      messageInput.trim()
+                        ? "bg-yelp-red text-white shadow-md hover:bg-yelp-dark"
+                        : "bg-transparent text-gray-300"
+                    }`}
+                  >
+                    <Send size={18} />
+                  </button>
+                </div>
+              </div>
+              <p className="mt-2 text-center text-[10px] text-gray-400">
+                Tip: type <span className="rounded bg-yelp-red/10 px-1 font-mono text-yelp-red">@yelp</span>{" "}
+                to pull Yelp AI into the chat
+              </p>
+            </form>
+          </>
+        )}
+      </main>
+
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/20 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       {newGroupModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -642,7 +496,7 @@ export default function HomePage() {
                 </label>
                 <input
                   type="text"
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
                   placeholder="e.g. Sunday brunch crew"
                   value={newGroupModal.name}
                   onChange={(e) =>
@@ -657,7 +511,7 @@ export default function HomePage() {
                 </label>
                 <input
                   type="text"
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
                   placeholder="e.g. Tempe, AZ"
                   value={newGroupModal.location}
                   onChange={(e) =>
@@ -715,7 +569,7 @@ export default function HomePage() {
                 </label>
                 <input
                   type="email"
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
                   placeholder="teammate@email.com"
                   value={inviteModal.email}
                   onChange={(e) =>
@@ -766,7 +620,7 @@ export default function HomePage() {
                 </label>
                 <input
                   type="text"
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
                   placeholder="e.g. Tempe, AZ"
                   value={locationModal.location}
                   onChange={(e) =>
