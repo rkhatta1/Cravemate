@@ -475,6 +475,16 @@ export default function LeaderboardPage() {
                             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-yelp-red/10 text-lg font-bold text-yelp-red">
                               {position}
                             </div>
+                            {entry.meta?.image && (
+                              <div className="hidden h-16 w-16 overflow-hidden rounded-2xl bg-gray-100 sm:block">
+                                <img
+                                  src={entry.meta.image}
+                                  alt={entry.businessName}
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                />
+                              </div>
+                            )}
                             <div>
                               <p className="flex items-center gap-2 text-lg font-semibold text-gray-900">
                                 {position === 1 && <Crown className="h-5 w-5 text-amber-400" />}
@@ -483,12 +493,23 @@ export default function LeaderboardPage() {
                               <p className="text-sm text-gray-500">
                                 {entry.neighborhood || entry.meta?.address || "Add details"}
                               </p>
-                              <p className="mt-1 text-sm text-gray-600">{entry.blurb}</p>
-                              {entry.meta?.rating && (
+                              {entry.meta?.rating ? (
                                 <p className="mt-1 text-xs text-gray-500">
                                   {entry.meta.rating}★ · {entry.meta.reviewCount || "—"} reviews ·{" "}
                                   {entry.meta.price || "price TBD"}
                                 </p>
+                              ) : (
+                                <p className="mt-1 text-sm text-gray-600">{entry.blurb}</p>
+                              )}
+                              {entry.meta?.url && (
+                                <a
+                                  href={entry.meta.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
+                                >
+                                  View on Yelp
+                                </a>
                               )}
                             </div>
                           </div>
@@ -587,11 +608,32 @@ export default function LeaderboardPage() {
                       <p className="text-sm text-gray-500">
                         {entry.neighborhood || entry.meta?.address || "Neighborhood TBD"}
                       </p>
+                      {entry.meta?.image && (
+                        <div className="mt-3 h-32 w-full overflow-hidden rounded-2xl bg-gray-100">
+                          <img
+                            src={entry.meta.image}
+                            alt={entry.businessName}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
                       <p className="mt-3 text-sm text-gray-600">{entry.blurb}</p>
                       {typeof entry.elo === "number" && (
                         <p className="mt-3 text-xs font-semibold text-gray-400">
                           Elo: {entry.elo}
                         </p>
+                      )}
+                      {entry.meta?.url && (
+                        <a
+                          href={entry.meta.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
+                        >
+                          View on Yelp
+                        </a>
                       )}
                     </button>
                   ))}
