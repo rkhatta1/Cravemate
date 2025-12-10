@@ -14,7 +14,7 @@ export const useUserStore = create(
       dietaryPrefs: [],
       favorites: { 
         cuisines: [], 
-        dishes: [] // [{ cuisine, name, restaurant }]
+        foods: [] // list of favorite foods
       },
       vibeGameAnswers: [], // Stores the text reviews they chose
 
@@ -50,7 +50,7 @@ export const useUserStore = create(
           location: "",
         },
         dietaryPrefs: [], 
-        favorites: { cuisines: [], dishes: [] }, 
+        favorites: { cuisines: [], foods: [] }, 
         vibeGameAnswers: [] 
       }),
     }),

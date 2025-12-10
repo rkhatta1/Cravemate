@@ -336,7 +336,13 @@ export default function HomePage() {
 
       <main className="relative flex flex-1 flex-col bg-neutral-50">
         {!hasGroups && (
-          <EmptyState onCreate={openCreateModal} isLoading={isLoadingGroups} error={loadError} />
+          <EmptyState
+            onCreate={openCreateModal}
+            isLoading={isLoadingGroups}
+            error={loadError}
+            showSidebarToggle={!sidebarOpen}
+            onOpenSidebar={() => setSidebarOpen(true)}
+          />
         )}
         {hasGroups && !activeGroup && <EmptyConversation />}
         {hasGroups && activeGroup && (

@@ -33,9 +33,9 @@ const DISH_IDEAS = {
   Caribbean: ["Jerk Chicken", "Ropa Vieja", "Cuban Sandwich"],
 };
 
-const emptyDish = { cuisine: "", name: "", restaurant: "" };
-
-const createYelpSlot = () => ({ loading: false, error: "", items: [] });
+const FOOD_WORDS = Array.from(
+  new Set(Object.values(DISH_IDEAS).flat())
+);
 
 export default function FavoritesStep() {
   const { favorites, setFavorites, setStep, profile } = useUserStore();
@@ -43,28 +43,15 @@ export default function FavoritesStep() {
   const [selectedCuisines, setSelectedCuisines] = useState(
     favorites.cuisines?.length ? favorites.cuisines : []
   );
-  const [dishCombos, setDishCombos] = useState(() => {
-    if (favorites.dishes?.length === 3) {
-      return favorites.dishes;
-    }
-    return Array.from({ length: 3 }, () => ({ ...emptyDish }));
-  });
-  const [helperMessage, setHelperMessage] = useState("");
-  const [yelpSlots, setYelpSlots] = useState(() =>
-    Array.from({ length: 3 }, () => createYelpSlot())
+  const [selectedFoods, setSelectedFoods] = useState(
+    favorites.foods?.length ? favorites.foods : []
   );
+  const [foodInput, setFoodInput] = useState("");
+  const [helperMessage, setHelperMessage] = useState("");
 
   const fireHelper = (msg) => {
     setHelperMessage(msg);
     setTimeout(() => setHelperMessage(""), 2500);
-  };
-
-  const updateYelpSlot = (index, patch) => {
-    setYelpSlots((prev) =>
-      prev.map((slot, slotIndex) =>
-        slotIndex === index ? { ...slot, ...patch } : slot
-      )
-    );
   };
 
   const toggleCuisine = (cuisine) => {
@@ -79,75 +66,32 @@ export default function FavoritesStep() {
         }
         next = [...prev, cuisine];
       }
-
-      setDishCombos((combos) =>
-        combos.map((combo) =>
-          combo.cuisine && !next.includes(combo.cuisine)
-            ? { ...combo, cuisine: "" }
-            : combo
-        )
-      );
-
       return next;
     });
   };
 
-  const updateDish = (index, field, value) => {
-    setDishCombos((prev) =>
-      prev.map((combo, comboIndex) =>
-        comboIndex === index ? { ...combo, [field]: value } : combo
-      )
-    );
-    if (field === "cuisine") {
-      updateYelpSlot(index, { items: [] });
-    }
-  };
-
-  const fetchYelpSuggestions = async (index) => {
-    const combo = dishCombos[index];
-    if (!profile.location?.trim()) {
-      fireHelper("Add a city or zip code first to unlock Yelp ideas.");
-      return;
-    }
-    if (!combo.cuisine) {
-      fireHelper("Pick a cuisine for this card before summoning Yelp.");
-      return;
-    }
-
-    updateYelpSlot(index, { loading: true, error: "" });
-
-    try {
-      const response = await fetch("/api/yelp/suggestions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location: profile.location,
-          cuisine: combo.cuisine,
-          dishKeyword: combo.name,
-        }),
-      });
-
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload?.error || "Failed to reach Yelp AI");
+  const toggleFood = (food) => {
+    setSelectedFoods((prev) => {
+      if (prev.includes(food)) {
+        return prev.filter((f) => f !== food);
       }
-
-      updateYelpSlot(index, {
-        loading: false,
-        error: "",
-        items: payload?.suggestions || [],
-      });
-    } catch (error) {
-      updateYelpSlot(index, {
-        loading: false,
-        error: error.message || "Could not load Yelp suggestions",
-      });
-    }
+      if (prev.length >= 8) {
+        fireHelper("Pick up to 8 foods for now.");
+        return prev;
+      }
+      return [...prev, food];
+    });
   };
 
-  const applyYelpSuggestion = (index, suggestion) => {
-    updateDish(index, "name", suggestion.dish || "");
-    updateDish(index, "restaurant", suggestion.restaurant || "");
+  const addFoodFromInput = () => {
+    const value = foodInput.trim();
+    if (!value) return;
+    if (selectedFoods.includes(value)) {
+      setFoodInput("");
+      return;
+    }
+    setSelectedFoods((prev) => (prev.length >= 8 ? prev : [...prev, value]));
+    setFoodInput("");
   };
 
   const handleNext = () => {
@@ -155,19 +99,14 @@ export default function FavoritesStep() {
       fireHelper("Lock in three cuisines to keep things balanced.");
       return;
     }
-
-    const completedCombos = dishCombos.filter(
-      (combo) => combo.cuisine && combo.name && combo.restaurant
-    );
-
-    if (completedCombos.length !== 3) {
-      fireHelper("Describe a dish + go-to spot for each cuisine.");
+    if (selectedFoods.length < 3) {
+      fireHelper("Add at least three foods so @yelp learns your cravings.");
       return;
     }
 
     setFavorites({
       cuisines: selectedCuisines,
-      dishes: dishCombos,
+      foods: selectedFoods,
     });
     setStep(3);
   };
@@ -183,10 +122,10 @@ export default function FavoritesStep() {
             key={option}
             type="button"
             onClick={() => toggleCuisine(option)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+            className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
               isSelected
-                ? "bg-orange-100 border-orange-500 text-orange-700"
-                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                ? "border-yelp-red bg-yelp-red/10 text-yelp-red"
+                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
             }`}
           >
             {option}
@@ -196,15 +135,39 @@ export default function FavoritesStep() {
     [selectedCuisines]
   );
 
+  const foodCloud = useMemo(
+    () =>
+      FOOD_WORDS.map((word, idx) => {
+        const isSelected = selectedFoods.includes(word);
+        const sizeClass =
+          idx % 3 === 0 ? "text-base" : idx % 3 === 1 ? "text-sm" : "text-xs";
+        return (
+          <button
+            key={word}
+            type="button"
+            onClick={() => toggleFood(word)}
+            className={`rounded-full border px-3 py-2 font-medium transition-colors ${sizeClass} ${
+              isSelected
+                ? "border-yelp-red bg-yelp-red/10 text-yelp-red shadow-sm"
+                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {word}
+          </button>
+        );
+      }),
+    [selectedFoods]
+  );
+
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <h2 className="text-2xl font-bold text-gray-900">Dial in your cravings</h2>
-        <p className="text-gray-500">
-          Choose the flavors you obsess over, then tell us the exact dish + spot you rave about.
+        <h2 className="text-2xl font-bold text-neutral-900">Dial in your cravings</h2>
+        <p className="text-neutral-500">
+          Choose the flavors you obsess over, then shout out the dishes you can’t stop ordering.
         </p>
         {!profile.location && (
-          <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/70 p-3 text-sm text-orange-700">
+          <div className="rounded-xl border border-dashed border-yelp-red/30 bg-yelp-red/10 p-3 text-sm text-yelp-red">
             Add your city or zip code in Step 1 to unlock Yelp-powered suggestions.
           </div>
         )}
@@ -212,146 +175,65 @@ export default function FavoritesStep() {
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Top cuisines</h3>
-          <span className="text-sm text-gray-500">
+          <h3 className="text-lg font-semibold text-neutral-900">Top cuisines</h3>
+          <span className="text-sm text-neutral-500">
             {selectedCuisines.length}/3 selected
           </span>
         </div>
         <div className="flex flex-wrap gap-2">{cuisineCards}</div>
         {helperMessage && (
-          <p className="text-sm text-orange-600 font-medium">{helperMessage}</p>
+          <p className="text-sm font-medium text-yelp-red">{helperMessage}</p>
         )}
       </section>
 
       <section className="space-y-4">
         <div>
-          <h3 className="text-lg font-semibold">Signature dishes + go-to spots</h3>
-          <p className="text-sm text-gray-500">
-            Each card should shout out a dish from the cuisines above, and where your crew has to order it.
+          <h3 className="text-lg font-semibold text-neutral-900">Favorite foods</h3>
+          <p className="text-sm text-neutral-500">
+            Tap to select the dishes you crave most, or add your own.
           </p>
         </div>
-
-        <div className="space-y-4">
-          {dishCombos.map((combo, index) => (
-            <div
-              key={`dish-${index}`}
-              className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3"
-            >
-              <div className="flex items-center justify-between text-sm text-gray-500 font-medium">
-                Dish #{index + 1}
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">{foodCloud}</div>
+          <div className="flex flex-wrap gap-2">
+            {selectedFoods.map((food) => (
+              <span
+                key={food}
+                className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-3 py-1 text-sm font-semibold text-white"
+              >
+                {food}
                 <button
                   type="button"
-                  onClick={() => fetchYelpSuggestions(index)}
-                  className="text-xs font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50"
-                  disabled={yelpSlots[index].loading}
+                  onClick={() => toggleFood(food)}
+                  className="text-white/80 hover:text-white"
                 >
-                  {yelpSlots[index].loading ? "Talking to Yelp..." : "Pull from Yelp"}
+                  ×
                 </button>
-              </div>
-              {!combo.cuisine && (
-                <p className="text-xs text-red-500">Select a cuisine first</p>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                    Cuisine
-                  </label>
-                  <select
-                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-3 text-sm focus:ring-2 focus:ring-orange-500"
-                    value={combo.cuisine}
-                    onChange={(e) => updateDish(index, "cuisine", e.target.value)}
-                    disabled={!selectedCuisines.length}
-                  >
-                    <option value="">
-                      {selectedCuisines.length
-                        ? "Pick from your list"
-                        : "Select cuisines first"}
-                    </option>
-                    {selectedCuisines.map((cuisine) => (
-                      <option key={cuisine} value={cuisine}>
-                        {cuisine}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                    Dish name
-                  </label>
-                  <input
-                    type="text"
-                    className="mt-1 w-full rounded-lg border border-gray-300 p-3 text-sm focus:ring-2 focus:ring-orange-500"
-                    placeholder="e.g. Green curry with tofu"
-                    value={combo.name}
-                    onChange={(e) => updateDish(index, "name", e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                  Favorite restaurant for this dish
-                </label>
-                <input
-                  type="text"
-                  className="mt-1 w-full rounded-lg border border-gray-300 p-3 text-sm focus:ring-2 focus:ring-orange-500"
-                  placeholder="Restaurant + neighborhood"
-                  value={combo.restaurant}
-                  onChange={(e) => updateDish(index, "restaurant", e.target.value)}
-                />
-              </div>
-
-              {combo.cuisine && (
-                <div className="text-xs text-gray-500">
-                  Need ideas? Try:{" "}
-                  <span className="font-semibold text-gray-600">
-                    {(DISH_IDEAS[combo.cuisine] || ["House specialty"])
-                      .slice(0, 2)
-                      .join(", ")}
-                  </span>
-                </div>
-              )}
-
-              {yelpSlots[index].error && (
-                <p className="text-xs text-red-500">{yelpSlots[index].error}</p>
-              )}
-
-              {yelpSlots[index].items.length > 0 && (
-                <div className="rounded-2xl border border-orange-100 bg-white/90 p-4 space-y-3">
-                  <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                    Yelp says try these
-                  </p>
-                  <div className="space-y-2">
-                    {yelpSlots[index].items.map((suggestion) => (
-                      <button
-                        key={suggestion.id}
-                        type="button"
-                        onClick={() => applyYelpSuggestion(index, suggestion)}
-                        className="w-full text-left rounded-xl border border-gray-200 bg-white p-3 hover:border-orange-400 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="font-semibold text-gray-800">
-                            {suggestion.restaurant}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {typeof suggestion.rating === "number"
-                              ? `${suggestion.rating.toFixed(1)}★`
-                              : ""}
-                          </p>
-                        </div>
-                        <p className="text-sm text-gray-600">{suggestion.dish}</p>
-                        {suggestion.address && (
-                          <p className="text-xs text-gray-500">{suggestion.address}</p>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+              </span>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
+            <input
+              type="text"
+              value={foodInput}
+              onChange={(e) => setFoodInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addFoodFromInput();
+                }
+              }}
+              placeholder="Add a custom favorite (e.g. spicy miso ramen)"
+              className="flex-1 border-0 bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:ring-0"
+            />
+            <button
+              type="button"
+              onClick={addFoodFromInput}
+              className="rounded-full bg-neutral-900 px-3 py-1 text-sm font-semibold text-white transition hover:bg-neutral-800"
+            >
+              Add
+            </button>
+          </div>
         </div>
       </section>
 
@@ -364,7 +246,7 @@ export default function FavoritesStep() {
         </button>
         <button
           onClick={handleNext}
-          className="w-full md:w-auto rounded-xl bg-black px-6 py-3 font-semibold text-white hover:bg-gray-800 transition-transform active:scale-95"
+          className="w-full md:w-auto rounded-xl bg-neutral-900 px-6 py-3 font-semibold text-white transition-transform hover:bg-neutral-800 active:scale-95"
         >
           Lock choices →
         </button>

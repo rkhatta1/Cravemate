@@ -230,9 +230,20 @@ export default function VibeGameStep() {
     if (isLoading) return;
     setIsLoading(true);
 
+    const onboardingPayload = {
+      profile,
+      username: profile.username || null,
+      dietaryPrefs,
+      favorites,
+      vibeReport,
+      vibeGameAnswers,
+    };
+
     try {
       const response = await fetch("/api/user/finish-onboarding", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(onboardingPayload),
       });
 
       if (response.ok) {
@@ -250,175 +261,116 @@ export default function VibeGameStep() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm uppercase tracking-wide text-gray-500 font-semibold">
-            Vibe Game
-          </p>
-          <p className="text-lg font-bold text-gray-900">
-            {isComplete
-              ? "Your vibe profile is ready"
-              : `Round ${vibeGameAnswers.length + 1} of ${totalRounds}`}
-          </p>
+    <div className="flex h-auto flex-col overflow-hidden bg-[#fff6ec]">
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-hidden px-4 py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-wide text-gray-500 font-semibold">
+              Vibe Game
+            </p>
+            <p className="text-lg font-bold text-gray-900">
+              {isComplete
+                ? "Your vibe profile is ready"
+                : `Round ${vibeGameAnswers.length + 1} of ${totalRounds}`}
+            </p>
+          </div>
+          <button
+            onClick={undoLast}
+            className="text-sm font-semibold text-gray-600 hover:text-gray-900"
+          >
+            {vibeGameAnswers.length ? "← Undo last pick" : "← Back to favorites"}
+          </button>
         </div>
-        <button
-          onClick={undoLast}
-          className="text-sm font-semibold text-gray-600 hover:text-gray-900"
-        >
-          {vibeGameAnswers.length ? "← Undo last pick" : "← Back to favorites"}
-        </button>
-      </div>
 
-      <div className="h-2 w-full rounded-full bg-gray-100">
+        <div className="h-2 w-full rounded-full bg-gray-100">
         <div
           className="h-full rounded-full bg-orange-500 transition-all"
           style={{ width: `${progress}%` }}
         />
       </div>
-
-      {!isComplete && currentQuestion && (
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-gray-100 bg-gradient-to-br from-orange-50 to-white p-6">
-            <p className="text-sm uppercase tracking-wide text-orange-600 font-semibold">
-              Where would you…
-            </p>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {currentQuestion.prompt}
-            </h2>
-            <p className="text-gray-500 mt-2">{currentQuestion.scenario}</p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            {currentQuestion.options.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => handleSelect(option)}
-                className="text-left rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:border-orange-400 hover:shadow-md transition-all"
-              >
-                <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                  {option.place}
-                </p>
-                <p className="mt-2 text-gray-700 leading-relaxed">{option.review}</p>
-                <p className="mt-4 text-sm text-gray-500">{option.keywords}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {isComplete && (
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
+        <div className="flex-1 space-y-6 overflow-y-auto">
+          {!isComplete && currentQuestion && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-gray-100 bg-gradient-to-br from-orange-50 to-white p-6">
                 <p className="text-sm uppercase tracking-wide text-orange-600 font-semibold">
-                  Vibe report
+                  Where would you…
                 </p>
                 <h2 className="text-2xl font-bold text-gray-900">
-                  {vibeReport.headline}
+                  {currentQuestion.prompt}
                 </h2>
+                <p className="text-gray-500 mt-2">{currentQuestion.scenario}</p>
               </div>
-              <button
-                onClick={restartGame}
-                className="text-sm font-semibold text-gray-500 hover:text-gray-900"
-              >
-                Start over
-              </button>
-            </div>
-            <p className="text-gray-600">{vibeReport.summary}</p>
-            <p className="text-sm text-gray-500">{vibeReport.secondary}</p>
-            <div className="flex flex-wrap gap-2">
-              {vibeReport.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full bg-orange-50 px-3 py-1 text-sm font-medium text-orange-700"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-6 space-y-4">
-            <p className="text-sm uppercase tracking-wide text-gray-500 font-semibold">
-              Context ready for @yelp
-            </p>
-            <ul className="space-y-2 text-gray-700">
-              <li>
-                <span className="font-semibold">Location:</span>{" "}
-                {profile.location || "Add your city in Step 1"}
-              </li>
-              <li>
-                <span className="font-semibold">Dietary filters:</span>{" "}
-                {dietaryPrefs.length
-                  ? dietaryPrefs.join(", ")
-                  : "Open to anything"}
-              </li>
-              <li>
-                <span className="font-semibold">Top cuisines:</span>{" "}
-                {favorites.cuisines?.length
-                  ? favorites.cuisines.join(", ")
-                  : "Need at least three favorites"}
-              </li>
-            </ul>
-            {favorites.dishes?.length > 0 && (
-              <div>
-                <p className="text-sm font-semibold text-gray-600 mb-2">
-                  Dish-to-spot receipts
-                </p>
-                <div className="space-y-2">
-                  {favorites.dishes.map((dish, index) => (
-                    <div
-                      key={`${dish.name}-${index}`}
-                      className="rounded-xl border border-white bg-white/90 px-4 py-3 text-sm text-gray-700"
-                    >
-                      <p className="font-semibold">{dish.name || "Untitled dish"}</p>
-                      <p className="text-gray-500">
-                        {dish.restaurant || "Add the restaurant"} · {dish.cuisine || "Cuisine?"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">
-                Recent picks
-              </p>
-              <div className="space-y-2">
-                {vibeGameAnswers.map((answer, index) => (
-                  <div
-                    key={`${answer.place}-${index}`}
-                    className="rounded-xl border border-orange-100 bg-white/80 px-4 py-3 text-sm"
+              <div className="grid gap-4 md:grid-cols-2">
+                {currentQuestion.options.map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => handleSelect(option)}
+                    className="text-left rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:border-orange-400 hover:shadow-md transition-all"
                   >
-                    <p className="font-semibold text-gray-800">
-                      {answer.prompt}
+                    <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                      {option.place}
                     </p>
-                    <p className="text-gray-600">
-                      You chose <span className="font-semibold">{answer.place}</span> —{" "}
-                      {answer.keywords.toLowerCase()} vibes.
-                    </p>
-                  </div>
+                    <p className="mt-2 text-gray-700 leading-relaxed">{option.review}</p>
+                    <p className="mt-4 text-sm text-gray-500">{option.keywords}</p>
+                  </button>
                 ))}
               </div>
             </div>
-          </div>
+          )}
 
-          <button
-            onClick={finishOnboarding}
-            className="w-full rounded-2xl bg-black py-4 text-lg font-semibold text-white hover:bg-gray-800 transition-transform active:scale-95 flex items-center justify-center"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-            ) : (
-              "Jump into Cravemate →"
-            )}
-          </button>
+          {isComplete && (
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <div className="flex-1 space-y-6 overflow-y-auto pr-1">
+                <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm uppercase tracking-wide text-orange-600 font-semibold">
+                        Vibe report
+                      </p>
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {vibeReport.headline}
+                      </h2>
+                    </div>
+                    <button
+                      onClick={restartGame}
+                      className="text-sm font-semibold text-gray-500 hover:text-gray-900"
+                    >
+                      Start over
+                    </button>
+                  </div>
+                  <p className="text-gray-600">{vibeReport.summary}</p>
+                  <p className="text-sm text-gray-500">{vibeReport.secondary}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {vibeReport.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full bg-orange-50 px-3 py-1 text-sm font-medium text-orange-700"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <button
+                  onClick={finishOnboarding}
+                  className="w-full rounded-2xl bg-black py-4 text-lg font-semibold text-white hover:bg-gray-800 transition-transform active:scale-95 flex items-center justify-center"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                  ) : (
+                    "Jump into Cravemate →"
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

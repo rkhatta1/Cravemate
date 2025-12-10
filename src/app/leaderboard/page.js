@@ -181,29 +181,22 @@ export default function LeaderboardPage() {
         activeGroupId={null}
         onSelectGroup={(groupId) => router.push(`/home?group=${groupId}`)}
         onCreateGroup={() => router.push("/home?create=1")}
-        onOpenLeaderboard={() => setSidebarOpen(false)}
         sessionName={session?.user?.name}
         onSignOut={() => signOut({ callbackUrl: "/" })}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
       <main className="relative flex flex-1 flex-col overflow-y-auto">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className={`fixed left-3 top-3 z-20 rounded-lg border border-gray-200 bg-white p-2 text-gray-600 shadow-sm transition hover:border-yelp-red hover:text-yelp-red md:left-5 ${
+            sidebarOpen ? "md:opacity-0 md:pointer-events-none" : ""
+          }`}
+        >
+          <PanelLeft size={18} />
+        </button>
+
         <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-          <div className="flex items-center justify-between lg:hidden">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="flex items-center gap-2 rounded-2xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600"
-            >
-              <PanelLeft size={16} />
-              Menu
-            </button>
-            <button
-              onClick={() => router.push("/home")}
-              className="text-sm font-semibold text-yelp-red"
-            >
-              Back to chats
-            </button>
-          </div>
 
           <div className="grid gap-6 lg:grid-cols-[320px,1fr]">
             <div className="space-y-4">

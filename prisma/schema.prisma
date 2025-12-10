@@ -36,24 +36,25 @@ model Session {
 }
 
 model User {
-  id                    String        @id @default(cuid())
-  email                 String?       @unique
-  username              String?       @unique
+  id                    String             @id @default(cuid())
+  email                 String?            @unique
+  username              String?            @unique
   dietaryPrefs          Json?
   location              String?
   favoritesContext      Json?
   vibeReport            String?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
   emailVerified         DateTime?
   image                 String?
   name                  String?
-  hasFinishedOnboarding Boolean       @default(false)
+  hasFinishedOnboarding Boolean            @default(false)
   accounts              Account[]
   memberships           GroupMember[]
+  leaderboards          Leaderboard[]
+  LeaderboardMatch      LeaderboardMatch[]
   messages              Message[]
   sessions              Session[]
-  leaderboards          Leaderboard[]
 }
 
 model VerificationToken {
@@ -97,30 +98,53 @@ model Message {
 }
 
 model Leaderboard {
-  id            String              @id @default(cuid())
-  dish          String
-  dishSlug      String
-  location      String
-  locationSlug  String
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  createdById   String?
-  createdBy     User?               @relation(fields: [createdById], references: [id])
-  entries       LeaderboardEntry[]
+  id               String             @id @default(cuid())
+  dish             String
+  dishSlug         String
+  location         String
+  locationSlug     String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  createdById      String?
+  createdBy        User?              @relation(fields: [createdById], references: [id])
+  entries          LeaderboardEntry[]
+  LeaderboardMatch LeaderboardMatch[]
 
   @@unique([dishSlug, locationSlug])
 }
 
 model LeaderboardEntry {
-  id            String      @id @default(cuid())
-  leaderboardId String
-  businessId    String?
-  businessName  String
-  blurb         String?
-  neighborhood  String?
-  elo           Int         @default(1500)
-  rank          Int
-  meta          Json?
-  createdAt     DateTime    @default(now())
-  leaderboard   Leaderboard @relation(fields: [leaderboardId], references: [id])
+  id                                                           String             @id @default(cuid())
+  leaderboardId                                                String
+  businessId                                                   String?
+  businessName                                                 String
+  blurb                                                        String?
+  neighborhood                                                 String?
+  elo                                                          Int                @default(1500)
+  rank                                                         Int
+  meta                                                         Json?
+  createdAt                                                    DateTime           @default(now())
+  leaderboard                                                  Leaderboard        @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+  LeaderboardMatch_LeaderboardMatch_entryAIdToLeaderboardEntry LeaderboardMatch[] @relation("LeaderboardMatch_entryAIdToLeaderboardEntry")
+  LeaderboardMatch_LeaderboardMatch_entryBIdToLeaderboardEntry LeaderboardMatch[] @relation("LeaderboardMatch_entryBIdToLeaderboardEntry")
+  LeaderboardMatch_LeaderboardMatch_winnerIdToLeaderboardEntry LeaderboardMatch[] @relation("LeaderboardMatch_winnerIdToLeaderboardEntry")
+}
+
+model LeaderboardMatch {
+  id                                                           String            @id
+  leaderboardId                                                String
+  playerId                                                     String
+  entryAId                                                     String
+  entryBId                                                     String
+  winnerId                                                     String?
+  pairKey                                                      String
+  skipped                                                      Boolean           @default(false)
+  createdAt                                                    DateTime          @default(now())
+  LeaderboardEntry_LeaderboardMatch_entryAIdToLeaderboardEntry LeaderboardEntry  @relation("LeaderboardMatch_entryAIdToLeaderboardEntry", fields: [entryAId], references: [id])
+  LeaderboardEntry_LeaderboardMatch_entryBIdToLeaderboardEntry LeaderboardEntry  @relation("LeaderboardMatch_entryBIdToLeaderboardEntry", fields: [entryBId], references: [id])
+  Leaderboard                                                  Leaderboard       @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+  User                                                         User              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  LeaderboardEntry_LeaderboardMatch_winnerIdToLeaderboardEntry LeaderboardEntry? @relation("LeaderboardMatch_winnerIdToLeaderboardEntry", fields: [winnerId], references: [id])
+
+  @@unique([playerId, leaderboardId, pairKey])
 }

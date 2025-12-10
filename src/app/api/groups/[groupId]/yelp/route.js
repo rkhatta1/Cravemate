@@ -25,9 +25,9 @@ const summarizeMember = (member) => {
   const diets = Array.isArray(user.dietaryPrefs) ? user.dietaryPrefs : [];
   const favorites = user.favoritesContext || {};
   const cuisines = Array.isArray(favorites.cuisines) ? favorites.cuisines : [];
-  const dishes =
-    Array.isArray(favorites.dishes) && favorites.dishes.length
-      ? favorites.dishes
+  const foods =
+    Array.isArray(favorites.foods) && favorites.foods.length
+      ? favorites.foods
       : [];
   const vibe = (() => {
     if (!user.vibeReport) return "";
@@ -43,15 +43,9 @@ const summarizeMember = (member) => {
   if (vibe) lines.push(`  vibe: ${vibe}`);
   if (diets.length) lines.push(`  dietary: ${diets.join(", ")}`);
   if (cuisines.length) lines.push(`  cuisines: ${cuisines.join(", ")}`);
-  if (dishes.length) {
-    const dishSummary = dishes
-      .slice(0, 3)
-      .map((dish) => {
-        if (typeof dish === "string") return dish;
-        return `${dish.name || "Favorite"} @ ${dish.restaurant || "Unknown"}`;
-      })
-      .join("; ");
-    lines.push(`  dishes: ${dishSummary}`);
+  if (foods.length) {
+    const foodSummary = foods.slice(0, 5).join("; ");
+    lines.push(`  foods: ${foodSummary}`);
   }
   return lines.join("\n");
 };
