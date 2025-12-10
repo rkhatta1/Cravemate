@@ -3,22 +3,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { Clock3, Crown, Loader2, MapPin, Plus, Share2, Sparkles, X } from "lucide-react";
 import Sidebar from "@/components/chat/Sidebar";
-import {
-  Clock3,
-  Crown,
-  Loader2,
-  MapPin,
-  PanelLeft,
-  Plus,
-  Share2,
-  Sparkles,
-  X,
-} from "lucide-react";
+import LeaderboardOverview from "@/components/leaderboard/LeaderboardOverview";
+
+const LEADERBOARDS_CACHE_KEY = "cravemate-leaderboards-cache";
+const GROUPS_CACHE_KEY = "cravemate-groups-cache";
 
 export default function LeaderboardPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+
+  const [groups, setGroups] = useState([]);
+  const [leaderboards, setLeaderboards] = useState([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
+  const [labOpen, setLabOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const [dishInput, setDishInput] = useState("");
   const [locationInput, setLocationInput] = useState("");
@@ -26,10 +28,8 @@ export default function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState(null);
   const [showAllEntries, setShowAllEntries] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
   const [recentSearches, setRecentSearches] = useState([]);
-  const [groups, setGroups] = useState([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [gameOpen, setGameOpen] = useState(false);
   const [gamePair, setGamePair] = useState(null);
   const [gameLoading, setGameLoading] = useState(false);
@@ -47,6 +47,27 @@ export default function LeaderboardPage() {
       setLocationInput(session.user.location);
     }
   }, [session, locationTouched]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const cachedGroups = localStorage.getItem(GROUPS_CACHE_KEY);
+      if (cachedGroups) {
+        const parsed = JSON.parse(cachedGroups);
+        if (Array.isArray(parsed)) setGroups(parsed);
+      }
+      const cachedLeaderboards = localStorage.getItem(LEADERBOARDS_CACHE_KEY);
+      if (cachedLeaderboards) {
+        const parsed = JSON.parse(cachedLeaderboards);
+        if (Array.isArray(parsed)) {
+          setLeaderboards(parsed);
+          if (parsed.length) setLoading(false);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to read cache", err);
+    }
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -69,18 +90,13 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     if (bootstrappedLeaderboard) return;
-    if (leaderboard) {
-      setBootstrappedLeaderboard(true);
-      return;
-    }
-    if (recentSearches.length === 0) return;
-    const latest = recentSearches[0];
-    handleRecentSelect(latest).finally(() => setBootstrappedLeaderboard(true));
-  }, [recentSearches, leaderboard, bootstrappedLeaderboard]);
+    setBootstrappedLeaderboard(true);
+  }, [bootstrappedLeaderboard]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
     let active = true;
+
     const loadGroups = async () => {
       try {
         const response = await fetch("/api/groups");
@@ -93,11 +109,49 @@ export default function LeaderboardPage() {
         console.error("Failed to load groups", err);
       }
     };
+
     loadGroups();
     return () => {
       active = false;
     };
   }, [status]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let active = true;
+
+    const loadLeaderboards = async () => {
+      setLoading((prev) => prev || !leaderboards.length);
+      setPageError("");
+      try {
+        const response = await fetch("/api/leaderboards?limit=32");
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.error || "Unable to load leaderboards");
+        }
+        if (active) {
+          setLeaderboards(payload.leaderboards || []);
+        }
+      } catch (err) {
+        if (active) setPageError(err.message || "Failed to load leaderboards");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    loadLeaderboards();
+    return () => {
+      active = false;
+    };
+  }, [status]);
+
+  const upsertLeaderboard = (board) => {
+    if (!board) return;
+    setLeaderboards((prev) => {
+      const rest = prev.filter((b) => b.id !== board.id);
+      return [board, ...rest];
+    });
+  };
 
   const subtitle = useMemo(() => {
     if (!leaderboard) {
@@ -120,19 +174,37 @@ export default function LeaderboardPage() {
     localStorage.setItem("cravemate-recent-leaderboards", JSON.stringify(next));
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(GROUPS_CACHE_KEY, JSON.stringify(groups));
+    } catch (err) {
+      console.warn("Failed to cache groups", err);
+    }
+  }, [groups]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(LEADERBOARDS_CACHE_KEY, JSON.stringify(leaderboards));
+    } catch (err) {
+      console.warn("Failed to cache leaderboards", err);
+    }
+  }, [leaderboards]);
+
   const handleCreateLeaderboard = async (event) => {
     event.preventDefault();
     const trimmedDish = dishInput.trim();
     const trimmedLocation = locationInput.trim();
     if (!trimmedDish) {
-      setError("Give us a dish to rank—tacos, ramen, vegan pastries, anything.");
+      setFormError("Give us a dish to rank—tacos, ramen, vegan pastries, anything.");
       return;
     }
     if (!trimmedLocation) {
-      setError("Set a city or zip for this leaderboard. This won't touch your profile.");
+      setFormError("Set a city or zip for this leaderboard. This won't touch your profile.");
       return;
     }
-    setError("");
+    setFormError("");
     setIsLoading(true);
     try {
       const response = await fetch("/api/leaderboards", {
@@ -146,13 +218,16 @@ export default function LeaderboardPage() {
       }
       setLeaderboard(payload.leaderboard);
       setShowAllEntries(false);
+      setDetailOpen(true);
+      setLabOpen(false);
+      upsertLeaderboard(payload.leaderboard);
       persistRecent({
         dish: payload.leaderboard.dish,
         location: payload.leaderboard.location,
       });
       setDishInput("");
     } catch (apiError) {
-      setError(apiError.message || "Failed to create leaderboard");
+      setFormError(apiError.message || "Failed to create leaderboard");
     } finally {
       setIsLoading(false);
     }
@@ -160,9 +235,7 @@ export default function LeaderboardPage() {
 
   const sortedEntries = useMemo(() => {
     if (!leaderboard?.entries) return [];
-    return [...leaderboard.entries].sort(
-      (a, b) => (b.elo ?? 1000) - (a.elo ?? 1000)
-    );
+    return [...leaderboard.entries].sort((a, b) => (b.elo ?? 1000) - (a.elo ?? 1000));
   }, [leaderboard]);
 
   const visibleEntries = sortedEntries.slice(
@@ -172,11 +245,12 @@ export default function LeaderboardPage() {
   const hasMoreEntries = sortedEntries.length > visibleEntries.length;
 
   const handleRecentSelect = async (item) => {
+    if (!item?.dish || !item?.location) return;
     setDishInput(item.dish);
     setLocationInput(item.location);
     setLocationTouched(true);
     setIsLoading(true);
-    setError("");
+    setFormError("");
     try {
       const response = await fetch(
         `/api/leaderboards?dish=${encodeURIComponent(item.dish)}&location=${encodeURIComponent(
@@ -189,8 +263,10 @@ export default function LeaderboardPage() {
       }
       setLeaderboard(payload.leaderboard);
       setShowAllEntries(false);
+      setDetailOpen(true);
+      upsertLeaderboard(payload.leaderboard);
     } catch (err) {
-      setError(err.message || "Failed to load leaderboard");
+      setFormError(err.message || "Failed to load leaderboard");
     } finally {
       setIsLoading(false);
     }
@@ -202,9 +278,7 @@ export default function LeaderboardPage() {
       setGameLoading(true);
       setGameError("");
       const query = anchorId ? `?anchor=${anchorId}` : "";
-      const response = await fetch(
-        `/api/leaderboards/${leaderboard.id}/game${query}`
-      );
+      const response = await fetch(`/api/leaderboards/${leaderboard.id}/game${query}`);
       if (response.status === 204) {
         setGamePair(null);
         setGameError("No fresh matchups left for this leaderboard.");
@@ -322,6 +396,8 @@ export default function LeaderboardPage() {
         sendingGroupId: "",
         error: "",
       });
+      setDetailOpen(false);
+      router.push(`/home?group=${groupId}`);
     } catch (err) {
       setShareModal((prev) => ({
         ...prev,
@@ -329,6 +405,11 @@ export default function LeaderboardPage() {
         error: err.message || "Unable to share",
       }));
     }
+  };
+
+  const handleCardSelect = (board) => {
+    if (!board) return;
+    handleRecentSelect({ dish: board.dish, location: board.location });
   };
 
   if (status === "loading") {
@@ -350,21 +431,54 @@ export default function LeaderboardPage() {
         onSignOut={() => signOut({ callbackUrl: "/" })}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        currentView="leaderboard"
+        onNavigate={(view) => router.push(view === "chat" ? "/home" : "/leaderboard")}
       />
-      <main className="relative flex flex-1 flex-col overflow-y-auto">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className={`fixed left-3 top-3 z-20 rounded-lg border border-gray-200 bg-white p-2 text-gray-600 shadow-sm transition hover:border-yelp-red hover:text-yelp-red md:left-5 ${
-            sidebarOpen ? "md:opacity-0 md:pointer-events-none" : ""
-          }`}
-        >
-          <PanelLeft size={18} />
-        </button>
 
-        <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+      <main className="relative flex flex-1 flex-col overflow-y-auto bg-neutral-50">
+        {loading ? (
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          </div>
+        ) : pageError ? (
+          <div className="m-auto text-center text-sm text-red-500">{pageError}</div>
+        ) : (
+          <LeaderboardOverview
+            leaderboards={leaderboards}
+            sidebarOpen={sidebarOpen}
+            onOpenSidebar={() => setSidebarOpen(true)}
+            onSelectLeaderboard={handleCardSelect}
+            onStartRanking={() => setLabOpen(true)}
+          />
+        )}
+      </main>
 
-          <div className="grid gap-6 lg:grid-cols-[320px,1fr]">
-            <div className="space-y-4">
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/20 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {labOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-yelp-red">
+                  Leaderboard Lab
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900">Spin up a new leaderboard</h3>
+              </div>
+              <button
+                className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200"
+                onClick={() => setLabOpen(false)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-[320px,1fr]">
               <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
                 <form onSubmit={handleCreateLeaderboard} className="space-y-4">
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-yelp-red">
@@ -414,7 +528,7 @@ export default function LeaderboardPage() {
                       </>
                     )}
                   </button>
-                  {error && <p className="text-sm font-semibold text-yelp-red">{error}</p>}
+                  {formError && <p className="text-sm font-semibold text-yelp-red">{formError}</p>}
                 </form>
               </section>
 
@@ -423,9 +537,6 @@ export default function LeaderboardPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Recent searches
                   </p>
-                  {recentSearches.length > 0 && (
-                    <span className="text-xs text-gray-400">{recentSearches.length}</span>
-                  )}
                 </div>
                 {recentSearches.length === 0 ? (
                   <p className="text-xs text-gray-400">
@@ -433,7 +544,7 @@ export default function LeaderboardPage() {
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {recentSearches.map((item) => (
+                    {recentSearches.slice(0, 2).map((item) => (
                       <button
                         key={item.key}
                         onClick={() => handleRecentSelect(item)}
@@ -454,162 +565,133 @@ export default function LeaderboardPage() {
                 )}
               </section>
             </div>
-
-            <div className="space-y-6">
-              <header className="rounded-3xl border border-gray-100 bg-white/90 px-8 py-10 shadow-sm">
-                <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-wide text-yelp-red">
-                  <Sparkles size={16} />
-                  Leaderboard Lab
-                </div>
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-                      Build the definitive ranking.
-                    </h1>
-                    <p className="mt-2 text-base text-gray-600">{subtitle}</p>
-                  </div>
-                  <div className="rounded-2xl border border-gray-200 bg-neutral-50 px-4 py-3 text-sm text-gray-600">
-                    <p className="flex items-center gap-2 font-semibold text-gray-800">
-                      <MapPin size={16} />
-                      {locationDisplay}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Leaderboards stay city-specific to spare the API bill.
-                    </p>
-                  </div>
-                </div>
-              </header>
-
-              {!leaderboard && (
-                <section className="rounded-3xl border border-dashed border-gray-200 bg-white/80 p-8 text-center text-gray-500">
-                  <p className="text-lg font-semibold text-gray-800">No leaderboard yet.</p>
-                  <p className="mt-2 text-sm">
-                    Plug in a dish to spin up the first bracket, then invite your group to keep playing.
-                  </p>
-                </section>
-              )}
-
-              {leaderboard && (
-                <section className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-gray-900">
-                      {leaderboard.dish} · {leaderboard.location}
-                    </h2>
-                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Seeded rankings
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-500">
-                      Top picks ranked by community Elo—run the game to keep them fresh.
-                    </p>
-                    <button
-                      onClick={handleStartGame}
-                      className="rounded-2xl bg-yelp-red px-4 py-2 text-sm font-semibold text-white shadow hover:bg-yelp-dark"
-                      disabled={!leaderboard}
-                    >
-                      Start Elo game
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {visibleEntries.map((entry, index) => {
-                      const position = index + 1;
-                      const eloScore = typeof entry.elo === "number" ? entry.elo : 1000;
-                      return (
-                        <div
-                          key={entry.id}
-                          className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white/90 p-5 shadow-sm sm:flex-row sm:items-center"
-                        >
-                          <div className="flex flex-1 items-center gap-4">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-yelp-red/10 text-lg font-bold text-yelp-red">
-                              {position}
-                            </div>
-                            {entry.meta?.image && (
-                              <div className="hidden h-16 w-16 overflow-hidden rounded-2xl bg-gray-100 sm:block">
-                                <img
-                                  src={entry.meta.image}
-                                  alt={entry.businessName}
-                                  className="h-full w-full object-cover"
-                                  loading="lazy"
-                                />
-                              </div>
-                            )}
-                            <div>
-                              <p className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-                                {position === 1 && <Crown className="h-5 w-5 text-amber-400" />}
-                                {entry.businessName}
-                              </p>
-                              <p className="text-sm text-gray-500">
-                                {entry.neighborhood || entry.meta?.address || "Add details"}
-                              </p>
-                              {entry.meta?.rating ? (
-                                <p className="mt-1 text-xs text-gray-500">
-                                  {entry.meta.rating}★ · {entry.meta.reviewCount || "—"} reviews ·{" "}
-                                  {entry.meta.price || "price TBD"}
-                                </p>
-                              ) : (
-                                entry.blurb && (
-                                  <p className="mt-1 text-sm text-gray-600">{entry.blurb}</p>
-                                )
-                              )}
-                              {entry.meta?.url && (
-                                <a
-                                  href={entry.meta.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
-                                >
-                                  View on Yelp
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="rounded-2xl bg-neutral-100 px-4 py-2 text-center">
-                              <p className="text-xs uppercase tracking-wide text-gray-500">Elo</p>
-                              <p className="text-lg font-semibold text-gray-900">{eloScore}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setShareModal({
-                                  open: true,
-                                  entry,
-                                  sendingGroupId: "",
-                                  error: "",
-                                })
-                              }
-                              className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-300"
-                            >
-                              <Share2 size={16} />
-                              Share to group
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {hasMoreEntries && (
-                    <div className="pt-4 text-center">
-                      <button
-                        className="text-sm font-semibold text-yelp-red hover:text-yelp-dark"
-                        onClick={() => setShowAllEntries(true)}
-                      >
-                        View entire leaderboard ({leaderboard.entries.length} spots)
-                      </button>
-                    </div>
-                 )}
-                </section>
-              )}
-            </div>
           </div>
         </div>
-      </main>
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black/20 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+      )}
+
+      {detailOpen && leaderboard && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-yelp-red">
+                  Leaderboard Lab
+                </p>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {leaderboard.dish} · {leaderboard.location}
+                </h2>
+                <p className="text-sm text-gray-600">{subtitle}</p>
+                <div className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-neutral-50 px-3 py-2 text-xs font-semibold text-gray-600">
+                  <MapPin size={14} />
+                  {locationDisplay}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleStartGame}
+                  className="rounded-2xl bg-yelp-red px-4 py-2 text-sm font-semibold text-white shadow hover:bg-yelp-dark disabled:opacity-50"
+                  disabled={!leaderboard}
+                >
+                  Start Elo game
+                </button>
+                <button
+                  className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200"
+                  onClick={() => setDetailOpen(false)}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {visibleEntries.map((entry, index) => {
+                const position = index + 1;
+                const eloScore = typeof entry.elo === "number" ? entry.elo : 1000;
+                return (
+                  <div
+                    key={entry.id}
+                    className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white/90 p-5 shadow-sm sm:flex-row sm:items-center"
+                  >
+                    <div className="flex flex-1 items-center gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-yelp-red/10 text-lg font-bold text-yelp-red">
+                        {position}
+                      </div>
+                      {entry.meta?.image && (
+                        <div className="hidden h-16 w-16 overflow-hidden rounded-2xl bg-gray-100 sm:block">
+                          <img
+                            src={entry.meta.image}
+                            alt={entry.businessName}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <p className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                          {position === 1 && <Crown className="h-5 w-5 text-amber-400" />}
+                          {entry.businessName}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {entry.neighborhood || entry.meta?.address || "Add details"}
+                        </p>
+                        {entry.meta?.rating ? (
+                          <p className="mt-1 text-xs text-gray-500">
+                            {entry.meta.rating}★ · {entry.meta.reviewCount || "—"} reviews ·{" "}
+                            {entry.meta.price || "price TBD"}
+                          </p>
+                        ) : (
+                          entry.blurb && <p className="mt-1 text-sm text-gray-600">{entry.blurb}</p>
+                        )}
+                        {entry.meta?.url && (
+                          <a
+                            href={entry.meta.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
+                          >
+                            View on Yelp
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-2xl bg-neutral-100 px-4 py-2 text-center">
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Elo</p>
+                        <p className="text-lg font-semibold text-gray-900">{eloScore}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShareModal({
+                            open: true,
+                            entry,
+                            sendingGroupId: "",
+                            error: "",
+                          })
+                        }
+                        className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-300"
+                      >
+                        <Share2 size={16} />
+                        Share to group
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {hasMoreEntries && (
+              <div className="pt-4 text-center">
+                <button
+                  className="text-sm font-semibold text-yelp-red hover:text-yelp-dark"
+                  onClick={() => setShowAllEntries(true)}
+                >
+                  View entire leaderboard ({leaderboard.entries.length} spots)
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {gameOpen && (
@@ -620,9 +702,7 @@ export default function LeaderboardPage() {
                 <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
                   Elo mini game
                 </p>
-                <h3 className="text-2xl font-bold text-gray-900">
-                  Pick the place that fits the vibe
-                </h3>
+                <h3 className="text-2xl font-bold text-gray-900">Pick the place that fits the vibe</h3>
               </div>
               <button
                 onClick={() => {
@@ -660,9 +740,7 @@ export default function LeaderboardPage() {
                       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                         {entry.meta?.categories?.[0] || "Restaurant"}
                       </p>
-                      <p className="mt-1 text-lg font-bold text-gray-900">
-                        {entry.businessName}
-                      </p>
+                      <p className="mt-1 text-lg font-bold text-gray-900">{entry.businessName}</p>
                       <p className="text-sm text-gray-500">
                         {entry.neighborhood || entry.meta?.address || "Neighborhood TBD"}
                       </p>
@@ -678,9 +756,7 @@ export default function LeaderboardPage() {
                       )}
                       <p className="mt-3 text-sm text-gray-600">{entry.blurb}</p>
                       {typeof entry.elo === "number" && (
-                        <p className="mt-3 text-xs font-semibold text-gray-400">
-                          Elo: {entry.elo}
-                        </p>
+                        <p className="mt-3 text-xs font-semibold text-gray-400">Elo: {entry.elo}</p>
                       )}
                       {entry.meta?.url && (
                         <a

@@ -87,16 +87,16 @@ model GroupMember {
 }
 
 model Message {
-  id             String   @id @default(cuid())
+  id             String            @id @default(cuid())
   content        String
-  isYelpResponse Boolean  @default(false)
-  sentAt         DateTime @default(now())
+  isYelpResponse Boolean           @default(false)
+  sentAt         DateTime          @default(now())
   senderId       String?
   groupId        String
-  group          Group    @relation(fields: [groupId], references: [id])
-  sender         User?    @relation(fields: [senderId], references: [id])
   sharedEntryId  String?
-  sharedEntry    LeaderboardEntry? @relation("SharedEntry", fields: [sharedEntryId], references: [id], onDelete: SetNull)
+  group          Group             @relation(fields: [groupId], references: [id])
+  sender         User?             @relation(fields: [senderId], references: [id])
+  sharedEntry    LeaderboardEntry? @relation("SharedEntry", fields: [sharedEntryId], references: [id])
 }
 
 model Leaderboard {
@@ -116,37 +116,37 @@ model Leaderboard {
 }
 
 model LeaderboardEntry {
-  id            String      @id @default(cuid())
-  leaderboardId String
-  businessId    String?
-  businessName  String
-  blurb         String?
-  neighborhood  String?
-  elo           Int         @default(1500)
-  rank          Int
-  meta          Json?
-  createdAt     DateTime    @default(now())
-  leaderboard   Leaderboard @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
-  matchesAsA    LeaderboardMatch[] @relation("MatchEntryA")
-  matchesAsB    LeaderboardMatch[] @relation("MatchEntryB")
-  matchesWon    LeaderboardMatch[] @relation("MatchWinner")
-  sharedMessages Message[] @relation("SharedEntry")
+  id             String             @id @default(cuid())
+  leaderboardId  String
+  businessId     String?
+  businessName   String
+  blurb          String?
+  neighborhood   String?
+  elo            Int                @default(1500)
+  rank           Int
+  meta           Json?
+  createdAt      DateTime           @default(now())
+  leaderboard    Leaderboard        @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+  matchesAsA     LeaderboardMatch[] @relation("MatchEntryA")
+  matchesAsB     LeaderboardMatch[] @relation("MatchEntryB")
+  matchesWon     LeaderboardMatch[] @relation("MatchWinner")
+  sharedMessages Message[]          @relation("SharedEntry")
 }
 
 model LeaderboardMatch {
-  id            String      @id @default(cuid())
+  id            String            @id @default(cuid())
   leaderboardId String
   playerId      String
   entryAId      String
   entryBId      String
   winnerId      String?
   pairKey       String
-  skipped       Boolean     @default(false)
-  createdAt     DateTime    @default(now())
-  leaderboard   Leaderboard @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
-  player        User        @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  entryA        LeaderboardEntry @relation("MatchEntryA", fields: [entryAId], references: [id])
-  entryB        LeaderboardEntry @relation("MatchEntryB", fields: [entryBId], references: [id])
+  skipped       Boolean           @default(false)
+  createdAt     DateTime          @default(now())
+  entryA        LeaderboardEntry  @relation("MatchEntryA", fields: [entryAId], references: [id])
+  entryB        LeaderboardEntry  @relation("MatchEntryB", fields: [entryBId], references: [id])
+  leaderboard   Leaderboard       @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+  player        User              @relation(fields: [playerId], references: [id], onDelete: Cascade)
   winner        LeaderboardEntry? @relation("MatchWinner", fields: [winnerId], references: [id])
 
   @@unique([playerId, leaderboardId, pairKey])

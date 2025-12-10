@@ -73,18 +73,15 @@ const MessageBubble = ({ message, isSequence }) => {
         <div className="max-w-xl rounded-2xl border border-orange-100 bg-white px-4 py-4 text-sm shadow">
           <div className="flex items-center justify-between">
             <div>
-              {!isSelf && !isSequence && (
-                <p className="text-xs font-semibold text-neutral-700">{senderName}</p>
-              )}
-              <p className="text-sm font-bold text-neutral-900">{shared.businessName}</p>
-              <p className="text-xs text-neutral-500">
-                {shared.neighborhood || shared.meta?.address || "Shared spot"}
-              </p>
-            </div>
-            <div className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-semibold text-neutral-600">
-              Elo {shared.elo ?? "—"}
-            </div>
-          </div>
+          {!isSelf && !isSequence && (
+            <p className="text-xs font-semibold text-neutral-700">{senderName}</p>
+          )}
+          <p className="text-sm font-bold text-neutral-900">{shared.businessName}</p>
+          <p className="text-xs text-neutral-500">
+            {shared.neighborhood || shared.meta?.address || "Shared spot"}
+          </p>
+        </div>
+      </div>
           {shared.meta?.image && (
             <div className="mt-3 h-40 w-full overflow-hidden rounded-2xl bg-gray-100">
               <img

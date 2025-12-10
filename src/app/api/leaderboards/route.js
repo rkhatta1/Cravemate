@@ -124,12 +124,22 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const dish = searchParams.get("dish")?.trim();
     const location = searchParams.get("location")?.trim();
+    const limit = Math.min(Number(searchParams.get("limit")) || 6, 20);
 
     if (!dish || !location) {
-      return NextResponse.json(
-        { error: "Dish and location are required" },
-        { status: 400 }
-      );
+      const leaderboards = await prisma.leaderboard.findMany({
+        take: limit,
+        orderBy: { updatedAt: "desc" },
+        include: {
+          entries: {
+            orderBy: [{ elo: "desc" }, { rank: "asc" }],
+            take: 5,
+          },
+        },
+      });
+      return NextResponse.json({
+        leaderboards: leaderboards.map(toResponse),
+      });
     }
 
     const leaderboard = await prisma.leaderboard.findUnique({

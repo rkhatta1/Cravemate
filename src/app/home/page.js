@@ -11,6 +11,8 @@ import EmptyConversation from "@/components/chat/EmptyConversation";
 import Sidebar from "@/components/chat/Sidebar";
 import ChatMessages from "@/components/chat/ChatMessages";
 
+const GROUPS_CACHE_KEY = "cravemate-groups-cache";
+
 export default function HomePage() {
   const { data: session, status } = useSession();
   const [revalidating, setRevalidating] = useState(true);
@@ -65,11 +67,28 @@ export default function HomePage() {
   });
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const cached = localStorage.getItem(GROUPS_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          setGroups(parsed);
+          setActiveGroupId(parsed[0]?.id || "");
+          setIsLoadingGroups(false);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to read group cache", err);
+    }
+  }, []);
+
+  useEffect(() => {
     if (status !== "authenticated") return;
     let isCancelled = false;
 
     async function loadGroups() {
-      setIsLoadingGroups(true);
+      setIsLoadingGroups((prev) => (!groups.length ? true : prev));
       setLoadError("");
       try {
         const response = await fetch("/api/groups");
@@ -80,6 +99,11 @@ export default function HomePage() {
         if (!isCancelled) {
           setGroups(payload.groups || []);
           setActiveGroupId(payload.groups?.[0]?.id || "");
+          try {
+            localStorage.setItem(GROUPS_CACHE_KEY, JSON.stringify(payload.groups || []));
+          } catch (err) {
+            console.warn("Failed to cache groups", err);
+          }
         }
       } catch (error) {
         if (!isCancelled) {
@@ -97,6 +121,15 @@ export default function HomePage() {
       isCancelled = true;
     };
   }, [status]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(GROUPS_CACHE_KEY, JSON.stringify(groups));
+    } catch (err) {
+      console.warn("Failed to cache groups", err);
+    }
+  }, [groups]);
 
   const hasGroups = groups.length > 0;
   const activeGroup = useMemo(
@@ -144,6 +177,13 @@ export default function HomePage() {
     isSubmitting: false,
   });
 
+  useEffect(() => {
+    const defaultLocation = session?.user?.location;
+    if (!defaultLocation) return;
+    setNewGroupModal((prev) => (prev.location ? prev : { ...prev, location: defaultLocation }));
+    setLocationModal((prev) => (prev.location ? prev : { ...prev, location: defaultLocation }));
+  }, [session]);
+
   if (status === "loading" || revalidating) {
     return <div className="p-10">Loading session...</div>;
   }
@@ -152,7 +192,7 @@ export default function HomePage() {
     setNewGroupModal({
       open: true,
       name: "",
-      location: "",
+      location: newGroupModal.location || session?.user?.location || "",
       error: "",
       isSubmitting: false,
     });
@@ -327,11 +367,12 @@ export default function HomePage() {
         activeGroupId={activeGroupId}
         onSelectGroup={setActiveGroupId}
         onCreateGroup={openCreateModal}
-        onOpenLeaderboard={() => router.push("/leaderboard")}
         sessionName={session?.user?.name}
         onSignOut={() => signOut({ callbackUrl: "/" })}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        currentView="chat"
+        onNavigate={(view) => router.push(view === "leaderboard" ? "/leaderboard" : "/home")}
       />
 
       <main className="relative flex flex-1 flex-col bg-neutral-50">
