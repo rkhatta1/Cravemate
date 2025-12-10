@@ -5,42 +5,21 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, Crown, Loader2, MapPin, Share2, Sparkles } from "lucide-react";
 
-const MOCK_LEADERS = [
-  {
-    id: "venezias",
-    name: "Venezia's New York Style Pizzeria",
-    blurb: "Counter-service pies with vegan friendly swaps and big group tables.",
-    neighborhood: "Tempe · Broadway",
-  },
-  {
-    id: "my-pie",
-    name: "My Pie Pizza",
-    blurb: "DIY toppings, patio energy, and late hours for group hangs.",
-    neighborhood: "Tempe · Downtown",
-  },
-  {
-    id: "prince-st",
-    name: "Prince Street Pizza",
-    blurb: "NYC slices with crispy edges and square pies built for sharing.",
-    neighborhood: "Tempe · Mill Ave",
-  },
-];
-
 export default function LeaderboardPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [dishInput, setDishInput] = useState("");
-  const [selectedDish, setSelectedDish] = useState("");
-  const [city, setCity] = useState("");
-  const [entries, setEntries] = useState([]);
+  const [locationInput, setLocationInput] = useState("");
+  const [locationTouched, setLocationTouched] = useState(false);
+  const [leaderboard, setLeaderboard] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (session?.user?.location) {
-      setCity(session.user.location);
+    if (!locationTouched && session?.user?.location) {
+      setLocationInput(session.user.location);
     }
-  }, [session]);
+  }, [session, locationTouched]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -49,11 +28,14 @@ export default function LeaderboardPage() {
   }, [status, router]);
 
   const subtitle = useMemo(() => {
-    if (!selectedDish) {
+    if (!leaderboard) {
       return "Kick off a leaderboard for your crew's cravings. Pick a dish and we'll seed it with Yelp intel.";
     }
-    return `Tracking the best ${selectedDish} spots around ${city || "your city"}. Keep voting to nudge the rankings.`;
-  }, [selectedDish, city]);
+    return `Tracking the best ${leaderboard.dish} spots around ${leaderboard.location}. Keep voting to nudge the rankings.`;
+  }, [leaderboard]);
+
+  const locationDisplay =
+    leaderboard?.location || locationInput || session?.user?.location || "No city set";
 
   if (status === "loading") {
     return (
@@ -63,24 +45,40 @@ export default function LeaderboardPage() {
     );
   }
 
-  const handleCreateLeaderboard = (event) => {
+  const handleCreateLeaderboard = async (event) => {
     event.preventDefault();
     const trimmedDish = dishInput.trim();
+    const trimmedLocation = locationInput.trim();
     if (!trimmedDish) {
       setError("Give us a dish to rank—tacos, ramen, vegan pastries, anything.");
       return;
     }
+    if (!trimmedLocation) {
+      setError("Set a city or zip for this leaderboard. This won't touch your profile.");
+      return;
+    }
     setError("");
     setIsLoading(true);
-    const seededEntries = MOCK_LEADERS.map((entry, index) => ({
-      ...entry,
-      elo: 1500 + (MOCK_LEADERS.length - index - 1) * 24,
-      position: index + 1,
-    }));
-    setEntries(seededEntries);
-    setSelectedDish(trimmedDish);
-    setDishInput("");
-    setTimeout(() => setIsLoading(false), 300);
+    try {
+      const response = await fetch("/api/leaderboards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dish: trimmedDish,
+          location: trimmedLocation,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Unable to create leaderboard");
+      }
+      setLeaderboard(payload.leaderboard);
+      setDishInput("");
+    } catch (apiError) {
+      setError(apiError.message || "Failed to create leaderboard");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -108,7 +106,7 @@ export default function LeaderboardPage() {
             <div className="rounded-2xl border border-gray-200 bg-neutral-50 px-4 py-3 text-sm text-gray-600">
               <p className="flex items-center gap-2 font-semibold text-gray-800">
                 <MapPin size={16} />
-                {city || "No city set"}
+                {locationDisplay}
               </p>
               <p className="text-xs text-gray-500">
                 Leaderboards stay city-specific to spare the API bill.
@@ -128,6 +126,21 @@ export default function LeaderboardPage() {
                 placeholder="e.g. chili crisp dumplings"
                 value={dishInput}
                 onChange={(event) => setDishInput(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-base focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Location (leaderboard only)
+              </label>
+              <input
+                type="text"
+                placeholder="Tempe, AZ"
+                value={locationInput}
+                onChange={(event) => {
+                  setLocationInput(event.target.value);
+                  if (!locationTouched) setLocationTouched(true);
+                }}
                 className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-base focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
               />
             </div>
@@ -153,7 +166,7 @@ export default function LeaderboardPage() {
           </form>
         </section>
 
-        {!selectedDish && (
+        {!leaderboard && (
           <section className="rounded-3xl border border-dashed border-gray-200 bg-white/80 p-8 text-center text-gray-500">
             <p className="text-lg font-semibold text-gray-800">
               No leaderboard yet.
@@ -164,51 +177,63 @@ export default function LeaderboardPage() {
           </section>
         )}
 
-        {selectedDish && (
+        {leaderboard && (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">
-                {selectedDish} · {city || "City TBD"}
+                {leaderboard.dish} · {leaderboard.location}
               </h2>
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Seeded rankings
               </span>
             </div>
             <div className="space-y-3">
-              {entries.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white/90 p-5 shadow-sm sm:flex-row sm:items-center"
-                >
-                  <div className="flex flex-1 items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-yelp-red/10 text-lg font-bold text-yelp-red">
-                      {entry.position}
-                    </div>
-                    <div>
-                      <p className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-                        {entry.position === 1 && <Crown className="h-5 w-5 text-amber-400" />}
-                        {entry.name}
+              {leaderboard.entries.map((entry, index) => {
+                const position = index + 1;
+                const eloScore = typeof entry.elo === "number" ? entry.elo : 1000;
+                return (
+                  <div
+                    key={entry.id}
+                    className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white/90 p-5 shadow-sm sm:flex-row sm:items-center"
+                  >
+                    <div className="flex flex-1 items-center gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-yelp-red/10 text-lg font-bold text-yelp-red">
+                        {position}
+                      </div>
+                      <div>
+                        <p className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                          {position === 1 && <Crown className="h-5 w-5 text-amber-400" />}
+                          {entry.businessName}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {entry.neighborhood || entry.meta?.address || "Add details"}
                       </p>
-                      <p className="text-sm text-gray-500">{entry.neighborhood}</p>
                       <p className="mt-1 text-sm text-gray-600">{entry.blurb}</p>
+                      {entry.meta?.rating && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          {entry.meta.rating}★ · {entry.meta.reviewCount || "—"} reviews ·{" "}
+                          {entry.meta.price || "price TBD"}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-2xl bg-neutral-100 px-4 py-2 text-center">
-                      <p className="text-xs uppercase tracking-wide text-gray-500">Elo</p>
-                      <p className="text-lg font-semibold text-gray-900">{entry.elo}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => router.push("/home")}
-                      className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-300"
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-2xl bg-neutral-100 px-4 py-2 text-center">
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Elo</p>
+                        <p className="text-lg font-semibold text-gray-900">{eloScore}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => router.push("/home")}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-300"
                     >
                       <Share2 size={16} />
                       Share to group
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}

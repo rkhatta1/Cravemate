@@ -53,6 +53,7 @@ model User {
   memberships           GroupMember[]
   messages              Message[]
   sessions              Session[]
+  leaderboards          Leaderboard[]
 }
 
 model VerificationToken {
@@ -93,4 +94,33 @@ model Message {
   groupId        String
   group          Group    @relation(fields: [groupId], references: [id])
   sender         User?    @relation(fields: [senderId], references: [id])
+}
+
+model Leaderboard {
+  id            String              @id @default(cuid())
+  dish          String
+  dishSlug      String
+  location      String
+  locationSlug  String
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  createdById   String?
+  createdBy     User?               @relation(fields: [createdById], references: [id])
+  entries       LeaderboardEntry[]
+
+  @@unique([dishSlug, locationSlug])
+}
+
+model LeaderboardEntry {
+  id            String      @id @default(cuid())
+  leaderboardId String
+  businessId    String?
+  businessName  String
+  blurb         String?
+  neighborhood  String?
+  elo           Int         @default(1500)
+  rank          Int
+  meta          Json?
+  createdAt     DateTime    @default(now())
+  leaderboard   Leaderboard @relation(fields: [leaderboardId], references: [id])
 }
