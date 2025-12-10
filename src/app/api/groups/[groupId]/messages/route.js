@@ -21,6 +21,9 @@ export async function POST(request, context) {
   }
   const body = await request.json();
   const content = body?.content?.trim();
+  const leaderboardEntryId = body?.leaderboardEntryId?.trim?.()
+    ? body.leaderboardEntryId.trim()
+    : body?.leaderboardEntryId;
 
   if (!content) {
     return NextResponse.json(
@@ -40,11 +43,26 @@ export async function POST(request, context) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  let sharedEntryConnect = undefined;
+  if (leaderboardEntryId) {
+    const entry = await prisma.leaderboardEntry.findUnique({
+      where: { id: leaderboardEntryId },
+    });
+    if (!entry) {
+      return NextResponse.json(
+        { error: "Shared restaurant no longer exists" },
+        { status: 400 }
+      );
+    }
+    sharedEntryConnect = leaderboardEntryId;
+  }
+
   const message = await prisma.message.create({
     data: {
       content,
       groupId,
       senderId: session.user.id,
+      sharedEntryId: sharedEntryConnect,
     },
     include: {
       sender: {
@@ -54,6 +72,7 @@ export async function POST(request, context) {
           username: true,
         },
       },
+      sharedEntry: true,
     },
   });
 

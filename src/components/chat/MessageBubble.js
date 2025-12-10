@@ -59,6 +59,71 @@ const MessageBubble = ({ message, isSequence }) => {
     );
   }
 
+  if (message.sharedEntry) {
+    const shared = message.sharedEntry;
+    return (
+      <div
+        className={`group flex gap-3 ${isSelf ? "justify-end" : "justify-start"} ${
+          isSequence ? "mt-1" : "mt-4"
+        }`}
+      >
+        <div className={showAvatar ? "" : "w-10"}>
+          {showAvatar && <AvatarPlaceholder>{avatarContent}</AvatarPlaceholder>}
+        </div>
+        <div className="max-w-xl rounded-2xl border border-orange-100 bg-white px-4 py-4 text-sm shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              {!isSelf && !isSequence && (
+                <p className="text-xs font-semibold text-neutral-700">{senderName}</p>
+              )}
+              <p className="text-sm font-bold text-neutral-900">{shared.businessName}</p>
+              <p className="text-xs text-neutral-500">
+                {shared.neighborhood || shared.meta?.address || "Shared spot"}
+              </p>
+            </div>
+            <div className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-semibold text-neutral-600">
+              Elo {shared.elo ?? "—"}
+            </div>
+          </div>
+          {shared.meta?.image && (
+            <div className="mt-3 h-40 w-full overflow-hidden rounded-2xl bg-gray-100">
+              <img
+                src={shared.meta.image}
+                alt={shared.businessName}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            </div>
+          )}
+          {!shared.meta?.rating && (shared.blurb || message.content) && (
+            <p className="mt-3 text-sm text-neutral-700">
+              {shared.blurb || message.content}
+            </p>
+          )}
+          {shared.meta?.rating ? (
+            <p className="mt-2 text-xs text-neutral-500">
+              {shared.meta.rating}★ · {shared.meta.reviewCount || "—"} reviews ·{" "}
+              {shared.meta.price || "price TBD"}
+            </p>
+          ) : null}
+          {shared.meta?.url && (
+            <a
+              href={shared.meta.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
+            >
+              View on Yelp
+            </a>
+          )}
+          <p className="mt-2 text-[10px] text-neutral-400">
+            {isSelf ? "You" : senderName} · {timeLabel}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`group flex gap-3 ${isSelf ? "justify-end" : "justify-start"} ${

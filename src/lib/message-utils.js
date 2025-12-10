@@ -19,6 +19,9 @@ export const parseYelpContent = (content) => {
 
 export const getMessagePreview = (message, limit = 80) => {
   if (!message) return "";
+  if (message.sharedEntry) {
+    return `Shared ${message.sharedEntry.businessName}`;
+  }
   let text = message.content || "";
   if (message.isYelpResponse) {
     const payload = parseYelpContent(message.content);
@@ -50,5 +53,15 @@ export const toClientMessage = (message, currentUserId) => {
     groupId: message.groupId,
     sender,
     isYelpResponse: isYelp,
+    sharedEntry: message.sharedEntry
+      ? {
+          id: message.sharedEntry.id,
+          businessName: message.sharedEntry.businessName,
+          blurb: message.sharedEntry.blurb,
+          neighborhood: message.sharedEntry.neighborhood,
+          elo: message.sharedEntry.elo,
+          meta: message.sharedEntry.meta || {},
+        }
+      : null,
   };
 };

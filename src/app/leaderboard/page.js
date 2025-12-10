@@ -35,6 +35,12 @@ export default function LeaderboardPage() {
   const [gameLoading, setGameLoading] = useState(false);
   const [gameError, setGameError] = useState("");
   const [bootstrappedLeaderboard, setBootstrappedLeaderboard] = useState(false);
+  const [shareModal, setShareModal] = useState({
+    open: false,
+    entry: null,
+    sendingGroupId: "",
+    error: "",
+  });
 
   useEffect(() => {
     if (!locationTouched && session?.user?.location) {
@@ -294,6 +300,37 @@ export default function LeaderboardPage() {
     }
   };
 
+  const handleShare = async (groupId) => {
+    if (!shareModal.entry || !groupId || shareModal.sendingGroupId) return;
+    try {
+      setShareModal((prev) => ({ ...prev, sendingGroupId: groupId, error: "" }));
+      const response = await fetch(`/api/groups/${groupId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: `[shared] ${shareModal.entry.businessName} from ${leaderboard?.dish} leaderboard`,
+          leaderboardEntryId: shareModal.entry.id,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to share");
+      }
+      setShareModal({
+        open: false,
+        entry: null,
+        sendingGroupId: "",
+        error: "",
+      });
+    } catch (err) {
+      setShareModal((prev) => ({
+        ...prev,
+        sendingGroupId: "",
+        error: err.message || "Unable to share",
+      }));
+    }
+  };
+
   if (status === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-neutral-50">
@@ -511,7 +548,9 @@ export default function LeaderboardPage() {
                                   {entry.meta.price || "price TBD"}
                                 </p>
                               ) : (
-                                <p className="mt-1 text-sm text-gray-600">{entry.blurb}</p>
+                                entry.blurb && (
+                                  <p className="mt-1 text-sm text-gray-600">{entry.blurb}</p>
+                                )
                               )}
                               {entry.meta?.url && (
                                 <a
@@ -532,7 +571,14 @@ export default function LeaderboardPage() {
                             </div>
                             <button
                               type="button"
-                              onClick={() => router.push("/home")}
+                              onClick={() =>
+                                setShareModal({
+                                  open: true,
+                                  entry,
+                                  sendingGroupId: "",
+                                  error: "",
+                                })
+                              }
                               className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-300"
                             >
                               <Share2 size={16} />
@@ -692,6 +738,71 @@ export default function LeaderboardPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {shareModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Share to chat
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900">
+                  {shareModal.entry?.businessName || "Pick a group"}
+                </h3>
+              </div>
+              <button
+                onClick={() =>
+                  setShareModal({
+                    open: false,
+                    entry: null,
+                    sendingGroupId: "",
+                    error: "",
+                  })
+                }
+                className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-gray-500">
+              Select a chat to drop this recommendation into the conversation.
+            </p>
+
+            <div className="mt-4 max-h-64 space-y-2 overflow-y-auto">
+              {groups.map((group) => (
+                <button
+                  key={group.id}
+                  onClick={() => handleShare(group.id)}
+                  className="flex w-full items-center justify-between rounded-2xl border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-yelp-red hover:text-yelp-red"
+                  disabled={shareModal.sendingGroupId === group.id}
+                >
+                  <div>
+                    <p>{group.name}</p>
+                    <p className="text-xs text-gray-400">
+                      {group.participants?.join(", ") || "Friends"}
+                    </p>
+                  </div>
+                  <span className="text-xs uppercase text-gray-400">
+                    {group.locationContext || "No city"}
+                  </span>
+                </button>
+              ))}
+              {groups.length > 5 && (
+                <p className="text-center text-xs text-gray-400">Scroll to view more chats</p>
+              )}
+              {!groups.length && (
+                <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-3 text-center text-sm text-gray-400">
+                  You’re not in any group chats yet.
+                </p>
+              )}
+            </div>
+
+            {shareModal.error && (
+              <p className="mt-3 text-sm font-semibold text-yelp-red">{shareModal.error}</p>
+            )}
           </div>
         </div>
       )}

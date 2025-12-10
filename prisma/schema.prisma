@@ -95,6 +95,8 @@ model Message {
   groupId        String
   group          Group    @relation(fields: [groupId], references: [id])
   sender         User?    @relation(fields: [senderId], references: [id])
+  sharedEntryId  String?
+  sharedEntry    LeaderboardEntry? @relation("SharedEntry", fields: [sharedEntryId], references: [id], onDelete: SetNull)
 }
 
 model Leaderboard {
@@ -128,6 +130,7 @@ model LeaderboardEntry {
   matchesAsA    LeaderboardMatch[] @relation("MatchEntryA")
   matchesAsB    LeaderboardMatch[] @relation("MatchEntryB")
   matchesWon    LeaderboardMatch[] @relation("MatchWinner")
+  sharedMessages Message[] @relation("SharedEntry")
 }
 
 model LeaderboardMatch {
