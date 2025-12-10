@@ -34,6 +34,7 @@ export default function LeaderboardPage() {
   const [gamePair, setGamePair] = useState(null);
   const [gameLoading, setGameLoading] = useState(false);
   const [gameError, setGameError] = useState("");
+  const [bootstrappedLeaderboard, setBootstrappedLeaderboard] = useState(false);
 
   useEffect(() => {
     if (!locationTouched && session?.user?.location) {
@@ -59,6 +60,17 @@ export default function LeaderboardPage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (bootstrappedLeaderboard) return;
+    if (leaderboard) {
+      setBootstrappedLeaderboard(true);
+      return;
+    }
+    if (recentSearches.length === 0) return;
+    const latest = recentSearches[0];
+    handleRecentSelect(latest).finally(() => setBootstrappedLeaderboard(true));
+  }, [recentSearches, leaderboard, bootstrappedLeaderboard]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
