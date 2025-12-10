@@ -13,6 +13,7 @@ import {
   Plus,
   Share2,
   Sparkles,
+  X,
 } from "lucide-react";
 
 export default function LeaderboardPage() {
@@ -29,6 +30,10 @@ export default function LeaderboardPage() {
   const [recentSearches, setRecentSearches] = useState([]);
   const [groups, setGroups] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [gameOpen, setGameOpen] = useState(false);
+  const [gamePair, setGamePair] = useState(null);
+  const [gameLoading, setGameLoading] = useState(false);
+  const [gameError, setGameError] = useState("");
 
   useEffect(() => {
     if (!locationTouched && session?.user?.location) {
@@ -135,11 +140,18 @@ export default function LeaderboardPage() {
     }
   };
 
-  const visibleEntries = leaderboard
-    ? leaderboard.entries.slice(0, showAllEntries ? leaderboard.entries.length : 10)
-    : [];
-  const hasMoreEntries =
-    leaderboard && leaderboard.entries.length > visibleEntries.length;
+  const sortedEntries = useMemo(() => {
+    if (!leaderboard?.entries) return [];
+    return [...leaderboard.entries].sort(
+      (a, b) => (b.elo ?? 1000) - (a.elo ?? 1000)
+    );
+  }, [leaderboard]);
+
+  const visibleEntries = sortedEntries.slice(
+    0,
+    showAllEntries ? sortedEntries.length : 10
+  );
+  const hasMoreEntries = sortedEntries.length > visibleEntries.length;
 
   const handleRecentSelect = async (item) => {
     setDishInput(item.dish);
@@ -163,6 +175,110 @@ export default function LeaderboardPage() {
       setError(err.message || "Failed to load leaderboard");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchGamePair = async (anchorId) => {
+    if (!leaderboard?.id) return false;
+    try {
+      setGameLoading(true);
+      setGameError("");
+      const query = anchorId ? `?anchor=${anchorId}` : "";
+      const response = await fetch(
+        `/api/leaderboards/${leaderboard.id}/game${query}`
+      );
+      if (response.status === 204) {
+        setGamePair(null);
+        setGameError("No fresh matchups left for this leaderboard.");
+        return false;
+      }
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to pull a match");
+      }
+      setGamePair(payload.pair || null);
+      return true;
+    } catch (err) {
+      setGamePair(null);
+      setGameError(err.message || "Unable to pull a matchup.");
+      return false;
+    } finally {
+      setGameLoading(false);
+    }
+  };
+
+  const handleStartGame = async () => {
+    if (!leaderboard?.id) return;
+    setGameOpen(true);
+    setGamePair(null);
+    setGameError("");
+    const success = await fetchGamePair();
+    if (!success) {
+      setGameOpen(false);
+    }
+  };
+
+  const submitMatch = async (payload) => {
+    if (!leaderboard?.id) return false;
+    try {
+      setGameLoading(true);
+      const response = await fetch(`/api/leaderboards/${leaderboard.id}/game`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = response.status === 204 ? null : await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to record match");
+      }
+      if (data?.winner || data?.loser) {
+        setLeaderboard((prev) => {
+          if (!prev) return prev;
+          const updatedEntries = prev.entries.map((entry) => {
+            if (entry.id === data.winner?.id) return { ...entry, elo: data.winner.elo };
+            if (entry.id === data.loser?.id) return { ...entry, elo: data.loser.elo };
+            return entry;
+          });
+          return { ...prev, entries: updatedEntries };
+        });
+      }
+      return true;
+    } catch (err) {
+      setGameError(err.message || "Unable to record your pick.");
+      return false;
+    } finally {
+      setGameLoading(false);
+    }
+  };
+
+  const handlePick = async (winnerId) => {
+    if (!gamePair || gamePair.length < 2) return;
+    const loser = gamePair.find((entry) => entry.id !== winnerId);
+    if (!loser) return;
+    const success = await submitMatch({
+      entryAId: gamePair[0].id,
+      entryBId: gamePair[1].id,
+      winnerId,
+      loserId: loser.id,
+    });
+    if (!success) return;
+    const hasNext = await fetchGamePair(winnerId);
+    if (!hasNext) {
+      setGameOpen(false);
+    }
+  };
+
+  const handleSkipMatch = async () => {
+    if (!gamePair || gamePair.length < 2) return;
+    const success = await submitMatch({
+      entryAId: gamePair[0].id,
+      entryBId: gamePair[1].id,
+      skip: true,
+    });
+    if (!success) return;
+    const hasNext = await fetchGamePair();
+    if (!hasNext) {
+      setGameOpen(false);
     }
   };
 
@@ -334,6 +450,18 @@ export default function LeaderboardPage() {
                       Seeded rankings
                     </span>
                   </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-500">
+                      Top picks ranked by community Elo—run the game to keep them fresh.
+                    </p>
+                    <button
+                      onClick={handleStartGame}
+                      className="rounded-2xl bg-yelp-red px-4 py-2 text-sm font-semibold text-white shadow hover:bg-yelp-dark"
+                      disabled={!leaderboard}
+                    >
+                      Start Elo game
+                    </button>
+                  </div>
                   <div className="space-y-3">
                     {visibleEntries.map((entry, index) => {
                       const position = index + 1;
@@ -391,7 +519,7 @@ export default function LeaderboardPage() {
                         View entire leaderboard ({leaderboard.entries.length} spots)
                       </button>
                     </div>
-                  )}
+                 )}
                 </section>
               )}
             </div>
@@ -403,6 +531,115 @@ export default function LeaderboardPage() {
           className="fixed inset-0 z-20 bg-black/20 md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
+      )}
+
+      {gameOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                  Elo mini game
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900">
+                  Pick the place that fits the vibe
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setGameOpen(false);
+                  setGamePair(null);
+                  setGameError("");
+                }}
+                className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {gameError && (
+              <p className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+                {gameError}
+              </p>
+            )}
+
+            <div className="mt-6">
+              {!gamePair && gameLoading && (
+                <div className="flex h-48 items-center justify-center text-gray-500">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              )}
+              {gamePair && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {gamePair.map((entry) => (
+                    <button
+                      key={entry.id}
+                      onClick={() => handlePick(entry.id)}
+                      disabled={gameLoading}
+                      className="rounded-3xl border border-gray-200 bg-white px-4 py-5 text-left shadow-sm transition hover:border-yelp-red hover:bg-yelp-red/5 disabled:opacity-60"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        {entry.meta?.categories?.[0] || "Restaurant"}
+                      </p>
+                      <p className="mt-1 text-lg font-bold text-gray-900">
+                        {entry.businessName}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {entry.neighborhood || entry.meta?.address || "Neighborhood TBD"}
+                      </p>
+                      <p className="mt-3 text-sm text-gray-600">{entry.blurb}</p>
+                      {typeof entry.elo === "number" && (
+                        <p className="mt-3 text-xs font-semibold text-gray-400">
+                          Elo: {entry.elo}
+                        </p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!gamePair && !gameLoading && (
+                <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-10 text-center text-sm text-gray-500">
+                  <p>No more matchups available. You’ve trained this leaderboard!</p>
+                  <button
+                    onClick={() => {
+                      setGameOpen(false);
+                      setGamePair(null);
+                      setGameError("");
+                    }}
+                    className="text-sm font-semibold text-yelp-red hover:text-yelp-dark"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <button
+                onClick={handleSkipMatch}
+                disabled={!gamePair || gameLoading}
+                className="rounded-2xl border border-gray-200 px-4 py-2 font-semibold text-gray-600 transition hover:border-gray-300 disabled:opacity-40"
+              >
+                Skip match
+              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-400">
+                  Winner stays on. Loser gets swapped for a new challenger.
+                </span>
+                <button
+                  onClick={() => {
+                    setGameOpen(false);
+                    setGamePair(null);
+                    setGameError("");
+                  }}
+                  className="rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                >
+                  Exit game
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
