@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 const TOKEN = process.env.MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+const CITY = "city";
 
 export async function GET(request) {
   try {
@@ -24,6 +25,7 @@ export async function GET(request) {
 
     const url = new URL("https://api.mapbox.com/search/searchbox/v1/suggest");
     url.searchParams.set("q", query);
+    url.searchParams.set("types", CITY);
     url.searchParams.set("access_token", TOKEN);
     url.searchParams.set("session_token", sessionToken);
 

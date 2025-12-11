@@ -25,6 +25,7 @@ const LeaderboardOverview = ({
   onLocationFocus,
   onLocationBlur,
   locationRef,
+  onLocationApply,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [visibleCount, setVisibleCount] = useState(8);
@@ -83,7 +84,7 @@ const LeaderboardOverview = ({
               type="text"
               className="block w-full pl-10 pr-9 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-yelp-red focus:border-yelp-red sm:text-sm transition-all"
               placeholder="City, State"
-              value={locationInput}
+              value={locationInput || ""}
               onFocus={onLocationFocus}
               onBlur={onLocationBlur}
               onChange={(e) => onLocationChange?.(e.target.value)}
@@ -110,6 +111,13 @@ const LeaderboardOverview = ({
               </div>
             )}
           </div>
+          <button
+            type="button"
+            onClick={onLocationApply}
+            className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-gray-300"
+          >
+            Apply
+          </button>
           <div className="flex items-center gap-3">
             <button
               onClick={onStartRanking}

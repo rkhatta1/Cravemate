@@ -23,6 +23,7 @@ export default function HomePage() {
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const groupsLoadedRef = useRef(false);
 
   const appendMessage = useCallback((groupsList, groupId, message, overrides = {}) => {
     const senderName =
@@ -89,6 +90,12 @@ export default function HomePage() {
     let isCancelled = false;
 
     async function loadGroups() {
+      if (groupsLoadedRef.current) return;
+      if (groups.length) {
+        groupsLoadedRef.current = true;
+        setIsLoadingGroups(false);
+        return;
+      }
       setIsLoadingGroups((prev) => (!groups.length ? true : prev));
       setLoadError("");
       try {
@@ -100,6 +107,7 @@ export default function HomePage() {
         if (!isCancelled) {
           setGroups(payload.groups || []);
           setActiveGroupId(payload.groups?.[0]?.id || "");
+          groupsLoadedRef.current = true;
           try {
             localStorage.setItem(GROUPS_CACHE_KEY, JSON.stringify(payload.groups || []));
           } catch (err) {
@@ -111,7 +119,7 @@ export default function HomePage() {
           setLoadError(error.message || "Failed to load chats");
         }
       } finally {
-        if (!isCancelled) {
+        if (!isCancelled && !groupsLoadedRef.current) {
           setIsLoadingGroups(false);
         }
       }
@@ -213,10 +221,6 @@ export default function HomePage() {
     setNewGroupModal((prev) => (prev.location ? prev : { ...prev, location: defaultLocation }));
     setLocationModal((prev) => (prev.location ? prev : { ...prev, location: defaultLocation }));
   }, [session]);
-
-  if (status === "loading" || revalidating) {
-    return <div className="p-10">Loading session...</div>;
-  }
 
   const openCreateModal = () =>
     setNewGroupModal({

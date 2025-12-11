@@ -25,6 +25,7 @@ export default function LeaderboardPage() {
 
   const [dishInput, setDishInput] = useState("");
   const [locationInput, setLocationInput] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
   const [locationTouched, setLocationTouched] = useState(false);
   const [leaderboard, setLeaderboard] = useState(null);
   const [showAllEntries, setShowAllEntries] = useState(false);
@@ -36,6 +37,7 @@ export default function LeaderboardPage() {
   const [gameLoading, setGameLoading] = useState(false);
   const [gameError, setGameError] = useState("");
   const [bootstrappedLeaderboard, setBootstrappedLeaderboard] = useState(false);
+  const groupsLoadedRef = useRef(false);
   const [shareModal, setShareModal] = useState({
     open: false,
     entry: null,
@@ -64,6 +66,7 @@ export default function LeaderboardPage() {
   useEffect(() => {
     if (!locationTouched && session?.user?.location) {
       setLocationInput(session.user.location);
+      setLocationFilter(session.user.location);
     }
   }, [session, locationTouched]);
 
@@ -75,13 +78,15 @@ export default function LeaderboardPage() {
   };
 
   const handleLocationChange = (value) => {
-    setLocationInput(value);
+    setLocationInput(value || "");
     setLocationTouched(true);
     setLocationFocused(true);
   };
 
   const handleLocationSelect = (suggestion) => {
-    setLocationInput(formatLocation(suggestion));
+    const formatted = formatLocation(suggestion);
+    setLocationInput(formatted);
+    setLocationFilter(formatted);
     clearLeaderboardLocationSuggestions();
     setLocationFocused(false);
     setLocationTouched(true);
@@ -91,6 +96,29 @@ export default function LeaderboardPage() {
 
   const handleLocationBlur = () => {
     setTimeout(() => setLocationFocused(false), 120);
+  };
+
+  const handleLocationApply = () => {
+    setLocationFilter(locationInput.trim());
+    setLocationTouched(true);
+    setLocationFocused(false);
+    clearLeaderboardLocationSuggestions();
+  };
+
+  const matchesLocation = (boardLocation, filter) => {
+    if (!filter) return true;
+    const boardValue = (boardLocation || "").toLowerCase().trim();
+    const filterValue = filter.toLowerCase().trim();
+    const filterCity = filterValue.split(",")[0]?.trim();
+
+    if (!boardValue) return false;
+    if (!filterValue) return true;
+
+    return (
+      boardValue.includes(filterValue) ||
+      filterValue.includes(boardValue) ||
+      (filterCity && boardValue.includes(filterCity))
+    );
   };
 
   useEffect(() => {
@@ -143,12 +171,18 @@ export default function LeaderboardPage() {
     let active = true;
 
     const loadGroups = async () => {
+      if (groupsLoadedRef.current) return;
+      if (groups.length) {
+        groupsLoadedRef.current = true;
+        return;
+      }
       try {
         const response = await fetch("/api/groups");
         const payload = await response.json();
         if (!response.ok) throw new Error(payload?.error || "Unable to load chats");
         if (active) {
           setGroups(payload.groups || []);
+          groupsLoadedRef.current = true;
         }
       } catch (err) {
         console.error("Failed to load groups", err);
@@ -489,7 +523,13 @@ export default function LeaderboardPage() {
           <div className="m-auto text-center text-sm text-red-500">{pageError}</div>
         ) : (
           <LeaderboardOverview
-            leaderboards={leaderboards}
+            leaderboards={
+              locationFilter
+                ? leaderboards.filter((b) =>
+                    matchesLocation(b.location, locationFilter)
+                  )
+                : leaderboards
+            }
             sidebarOpen={sidebarOpen}
             onOpenSidebar={() => setSidebarOpen(true)}
             onSelectLeaderboard={handleCardSelect}
@@ -502,6 +542,7 @@ export default function LeaderboardPage() {
             onLocationFocus={handleLocationFocus}
             onLocationBlur={handleLocationBlur}
             locationRef={locationRef}
+            onLocationApply={handleLocationApply}
           />
         )}
       </main>

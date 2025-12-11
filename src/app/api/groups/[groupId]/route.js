@@ -70,6 +70,7 @@ export async function PATCH(request, context) {
           sender: {
             select: { id: true, name: true, username: true },
           },
+          sharedEntry: true,
         },
       },
     },
