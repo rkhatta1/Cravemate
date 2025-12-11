@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { Clock3, Crown, Loader2, MapPin, Plus, Share2, Sparkles, X } from "lucide-react";
 import Sidebar from "@/components/chat/Sidebar";
 import LeaderboardOverview from "@/components/leaderboard/LeaderboardOverview";
+import { useLocationAutocomplete } from "@/hooks/useLocationAutocomplete";
 
 const LEADERBOARDS_CACHE_KEY = "cravemate-leaderboards-cache";
 const GROUPS_CACHE_KEY = "cravemate-groups-cache";
@@ -41,12 +42,56 @@ export default function LeaderboardPage() {
     sendingGroupId: "",
     error: "",
   });
+  const [locationFocused, setLocationFocused] = useState(false);
+  const locationRef = useRef(null);
+  const {
+    suggestions: leaderboardLocationSuggestions,
+    loading: leaderboardLocationLoading,
+    clearSuggestions: clearLeaderboardLocationSuggestions,
+  } = useLocationAutocomplete(locationInput, { active: locationFocused });
+
+  useEffect(() => {
+    const handleClick = (event) => {
+      if (locationRef.current && !locationRef.current.contains(event.target)) {
+        clearLeaderboardLocationSuggestions();
+        setLocationFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [clearLeaderboardLocationSuggestions]);
 
   useEffect(() => {
     if (!locationTouched && session?.user?.location) {
       setLocationInput(session.user.location);
     }
   }, [session, locationTouched]);
+
+  const formatLocation = (suggestion) => {
+    if (!suggestion) return "";
+    const region = suggestion?.context?.region?.name;
+    const city = suggestion.name || suggestion.full || "";
+    return region ? `${city}, ${region}` : city;
+  };
+
+  const handleLocationChange = (value) => {
+    setLocationInput(value);
+    setLocationTouched(true);
+    setLocationFocused(true);
+  };
+
+  const handleLocationSelect = (suggestion) => {
+    setLocationInput(formatLocation(suggestion));
+    clearLeaderboardLocationSuggestions();
+    setLocationFocused(false);
+    setLocationTouched(true);
+  };
+
+  const handleLocationFocus = () => setLocationFocused(true);
+
+  const handleLocationBlur = () => {
+    setTimeout(() => setLocationFocused(false), 120);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -449,6 +494,14 @@ export default function LeaderboardPage() {
             onOpenSidebar={() => setSidebarOpen(true)}
             onSelectLeaderboard={handleCardSelect}
             onStartRanking={() => setLabOpen(true)}
+            locationInput={locationInput}
+            locationSuggestions={leaderboardLocationSuggestions}
+            locationLoading={leaderboardLocationLoading}
+            onLocationChange={handleLocationChange}
+            onLocationSelect={handleLocationSelect}
+            onLocationFocus={handleLocationFocus}
+            onLocationBlur={handleLocationBlur}
+            locationRef={locationRef}
           />
         )}
       </main>
@@ -497,21 +550,7 @@ export default function LeaderboardPage() {
                       className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
                     />
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      City / Zip (won't change your profile)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Tempe, AZ"
-                      value={locationInput}
-                      onChange={(event) => {
-                        setLocationInput(event.target.value);
-                        if (!locationTouched) setLocationTouched(true);
-                      }}
-                      className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
-                    />
-                  </div>
+                  {/* Location input removed; using global control in overview header */}
                   <button
                     type="submit"
                     disabled={isLoading}

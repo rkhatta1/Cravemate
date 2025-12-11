@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useSocket } from "@/hooks/useSocket";
 import { useRouter } from "next/navigation";
 import { getMessagePreview } from "@/lib/message-utils";
-import { PlusCircle, Send, MapPin, PanelLeft } from "lucide-react";
+import { PlusCircle, Send, MapPin, PanelLeft, Loader2 } from "lucide-react";
 import EmptyState from "@/components/chat/EmptyState";
 import EmptyConversation from "@/components/chat/EmptyConversation";
 import Sidebar from "@/components/chat/Sidebar";
 import ChatMessages from "@/components/chat/ChatMessages";
+import { useLocationAutocomplete } from "@/hooks/useLocationAutocomplete";
 
 const GROUPS_CACHE_KEY = "cravemate-groups-cache";
 
@@ -176,6 +177,35 @@ export default function HomePage() {
     error: "",
     isSubmitting: false,
   });
+  const [createLocationFocused, setCreateLocationFocused] = useState(false);
+  const [editLocationFocused, setEditLocationFocused] = useState(false);
+  const createLocationRef = useRef(null);
+  const editLocationRef = useRef(null);
+  const {
+    suggestions: createLocationSuggestions,
+    loading: createLocationLoading,
+    clearSuggestions: clearCreateLocationSuggestions,
+  } = useLocationAutocomplete(newGroupModal.location, { active: createLocationFocused });
+  const {
+    suggestions: editLocationSuggestions,
+    loading: editLocationLoading,
+    clearSuggestions: clearEditLocationSuggestions,
+  } = useLocationAutocomplete(locationModal.location, { active: editLocationFocused });
+
+  useEffect(() => {
+    const handleClick = (event) => {
+      if (createLocationRef.current && !createLocationRef.current.contains(event.target)) {
+        clearCreateLocationSuggestions();
+        setCreateLocationFocused(false);
+      }
+      if (editLocationRef.current && !editLocationRef.current.contains(event.target)) {
+        clearEditLocationSuggestions();
+        setEditLocationFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [clearCreateLocationSuggestions, clearEditLocationSuggestions]);
 
   useEffect(() => {
     const defaultLocation = session?.user?.location;
@@ -358,6 +388,13 @@ export default function HomePage() {
     } finally {
       setLocationModal((prev) => ({ ...prev, isSubmitting: false }));
     }
+  };
+
+  const formatLocation = (suggestion) => {
+    if (!suggestion) return "";
+    const region = suggestion?.context?.region?.name;
+    const city = suggestion.name || suggestion.full || "";
+    return region ? `${city}, ${region}` : city;
   };
 
   return (
@@ -553,19 +590,51 @@ export default function HomePage() {
                 />
               </div>
 
-              <div>
+              <div ref={createLocationRef}>
                 <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   City / Zip
                 </label>
-                <input
-                  type="text"
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
-                  placeholder="e.g. Tempe, AZ"
-                  value={newGroupModal.location}
-                  onChange={(e) =>
-                    setNewGroupModal((prev) => ({ ...prev, location: e.target.value }))
-                  }
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
+                    placeholder="e.g. Tempe, AZ"
+                    value={newGroupModal.location}
+                    onFocus={() => setCreateLocationFocused(true)}
+                    onChange={(e) =>
+                      setNewGroupModal((prev) => ({ ...prev, location: e.target.value }))
+                    }
+                  />
+                  {createLocationLoading && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+                  )}
+                  {createLocationSuggestions.length > 0 && (
+                    <div className="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                      {createLocationSuggestions.map((suggestion) => (
+                        <button
+                          type="button"
+                          key={suggestion.id}
+                          onClick={() => {
+                            setNewGroupModal((prev) => ({
+                              ...prev,
+                              location: formatLocation(suggestion),
+                            }));
+                            clearCreateLocationSuggestions();
+                            setCreateLocationFocused(false);
+                          }}
+                          className="flex w-full flex-col items-start gap-0.5 px-4 py-2 text-left transition hover:bg-gray-50"
+                        >
+                          <span className="text-sm font-semibold text-gray-900">
+                            {suggestion.name}
+                          </span>
+                          {suggestion.full && suggestion.full !== suggestion.name && (
+                            <span className="text-xs text-gray-500">{suggestion.full}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <p className="mt-1 text-xs text-gray-500">
                   Required so @yelp knows where to search.
                 </p>
@@ -662,19 +731,51 @@ export default function HomePage() {
             </div>
 
             <div className="mt-5 space-y-4">
-              <div>
+              <div ref={editLocationRef}>
                 <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   City / Zip
                 </label>
-                <input
-                  type="text"
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
-                  placeholder="e.g. Tempe, AZ"
-                  value={locationModal.location}
-                  onChange={(e) =>
-                    setLocationModal((prev) => ({ ...prev, location: e.target.value }))
-                  }
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-yelp-red focus:ring-1 focus:ring-yelp-red/60"
+                    placeholder="e.g. Tempe, AZ"
+                    value={locationModal.location}
+                    onFocus={() => setEditLocationFocused(true)}
+                    onChange={(e) =>
+                      setLocationModal((prev) => ({ ...prev, location: e.target.value }))
+                    }
+                  />
+                  {editLocationLoading && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+                  )}
+                  {editLocationSuggestions.length > 0 && (
+                    <div className="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                      {editLocationSuggestions.map((suggestion) => (
+                        <button
+                          type="button"
+                          key={suggestion.id}
+                          onClick={() => {
+                            setLocationModal((prev) => ({
+                              ...prev,
+                              location: formatLocation(suggestion),
+                            }));
+                            clearEditLocationSuggestions();
+                            setEditLocationFocused(false);
+                          }}
+                          className="flex w-full flex-col items-start gap-0.5 px-4 py-2 text-left transition hover:bg-gray-50"
+                        >
+                          <span className="text-sm font-semibold text-gray-900">
+                            {suggestion.name}
+                          </span>
+                          {suggestion.full && suggestion.full !== suggestion.name && (
+                            <span className="text-xs text-gray-500">{suggestion.full}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {locationModal.error && (

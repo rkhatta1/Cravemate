@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { PanelLeft, Search, Flame, Utensils } from "lucide-react";
+import { PanelLeft, Search, Flame, Utensils, MapPin, Loader2 } from "lucide-react";
 import LeaderboardCard from "./LeaderboardCard";
 
 const getIconForDish = (dish = "") => {
@@ -17,6 +17,14 @@ const LeaderboardOverview = ({
   onOpenSidebar,
   onSelectLeaderboard,
   onStartRanking,
+  locationInput,
+  locationSuggestions = [],
+  locationLoading = false,
+  onLocationChange,
+  onLocationSelect,
+  onLocationFocus,
+  onLocationBlur,
+  locationRef,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [visibleCount, setVisibleCount] = useState(8);
@@ -24,14 +32,14 @@ const LeaderboardOverview = ({
   const filtered = useMemo(() => {
     if (!searchTerm.trim()) return leaderboards;
     return leaderboards.filter((board) => {
-      const haystack = `${board.dish || ""} ${board.location || ""} ${board.title || ""}`.toLowerCase();
+      const haystack = `${board.dish || ""} ${board.title || ""}`.toLowerCase();
       return haystack.includes(searchTerm.trim().toLowerCase());
     });
   }, [leaderboards, searchTerm]);
 
   const decorated = filtered.map((board) => ({
     ...board,
-    title: board.title || `${board.dish} · ${board.location}`,
+    title: board.title || board.dish,
     icon: board.icon || getIconForDish(board.dish || board.title),
   }));
 
@@ -66,6 +74,41 @@ const LeaderboardOverview = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+          </div>
+          <div className="relative w-[220px]" ref={locationRef}>
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <MapPin size={16} className="text-gray-400" />
+            </div>
+            <input
+              type="text"
+              className="block w-full pl-10 pr-9 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-yelp-red focus:border-yelp-red sm:text-sm transition-all"
+              placeholder="City, State"
+              value={locationInput}
+              onFocus={onLocationFocus}
+              onBlur={onLocationBlur}
+              onChange={(e) => onLocationChange?.(e.target.value)}
+            />
+            {locationLoading && (
+              <Loader2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+            )}
+            {locationSuggestions.length > 0 && (
+              <div className="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                {locationSuggestions.map((suggestion) => (
+                  <button
+                    type="button"
+                    key={suggestion.id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onLocationSelect?.(suggestion)}
+                    className="flex w-full flex-col items-start gap-0.5 px-4 py-2 text-left transition hover:bg-gray-50"
+                  >
+                    <span className="text-sm font-semibold text-gray-900">{suggestion.name}</span>
+                    {suggestion.full && suggestion.full !== suggestion.name && (
+                      <span className="text-xs text-gray-500">{suggestion.full}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button

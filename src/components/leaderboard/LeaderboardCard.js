@@ -25,7 +25,7 @@ const LeaderboardCard = ({ board, onSelect }) => {
           </div>
           <div>
             <h3 className="font-bold text-gray-900 text-sm md:text-base">
-              {board.title || `${board.dish} · ${board.location}`}
+              {board.title || board.dish}
             </h3>
             <div className="flex items-center gap-2 text-xs text-gray-400">
               <span>{updatedLabel}</span>
