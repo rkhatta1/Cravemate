@@ -324,7 +324,7 @@ export default function VibeGameStep() {
   }, [updateProfile, setDietaryPrefs, setFavorites, setVibeAnswers]);
 
   return (
-    <div className="flex h-auto flex-col overflow-hidden bg-[#fff6ec]">
+    <div className="flex max-h-[80vh] flex-col rounded-xl overflow-hidden bg-[#fff6ec]">
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-hidden px-4 py-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -351,7 +351,7 @@ export default function VibeGameStep() {
           style={{ width: `${progressValue}%` }}
         />
       </div>
-        <div className="flex-1 space-y-6 overflow-y-auto">
+        <div className="flex-1 space-y-6 overflow-hidden">
           {!isComplete && (
             <>
               {gameLoading && (
@@ -368,7 +368,7 @@ export default function VibeGameStep() {
                 </p>
               )}
               {currentQuestion && (
-                <div className="space-y-4">
+                <div className="space-y-4 flex flex-col">
                   <div className="rounded-2xl border border-gray-100 bg-gradient-to-br from-orange-50 to-white p-6">
                     <p className="text-sm uppercase tracking-wide text-orange-600 font-semibold">
                       Where would you…
@@ -382,12 +382,12 @@ export default function VibeGameStep() {
                     </p>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 overflow-y-hidden">
                     {currentQuestion.options.map((option, idx) => (
                       <button
                         key={option.id}
                         onClick={() => handleSelect(option)}
-                        className="text-left flex flex-col justify-start rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:border-orange-400 hover:shadow-md transition-all"
+                        className="text-left flex flex-col justify-start overflow-auto max-h-[40vh] rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:border-orange-400 hover:shadow-md transition-all"
                       >
                         <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
                           Option {idx + 1}
