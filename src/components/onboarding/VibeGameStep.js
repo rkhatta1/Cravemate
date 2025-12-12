@@ -130,7 +130,7 @@ export default function VibeGameStep() {
   const restartGame = () => setVibeAnswers([]);
 
   const finishOnboarding = async () => {
-    if (isLoading) return;
+    if (isLoading || vibeLoading) return;
     setIsLoading(true);
 
     const onboardingPayload = {
@@ -150,7 +150,11 @@ export default function VibeGameStep() {
       });
 
       if (response.ok) {
-        await update({ hasFinishedOnboarding: true });
+        await update({
+          hasFinishedOnboarding: true,
+          location: profile.location || "",
+          username: profile.username || "",
+        });
         resetOnboarding();
         router.push("/home");
       } else {
@@ -383,10 +387,10 @@ export default function VibeGameStep() {
                       <button
                         key={option.id}
                         onClick={() => handleSelect(option)}
-                        className="text-left rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:border-orange-400 hover:shadow-md transition-all"
+                        className="text-left flex flex-col justify-start rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:border-orange-400 hover:shadow-md transition-all"
                       >
                         <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                          Option {idx + 1} · {currentQuestion.cuisine}
+                          Option {idx + 1}
                         </p>
                         <p className="mt-2 text-gray-700 leading-relaxed">{option.review}</p>
                       </button>
@@ -451,9 +455,9 @@ export default function VibeGameStep() {
                 <button
                   onClick={finishOnboarding}
                   className="w-full rounded-2xl bg-black py-4 text-lg font-semibold text-white hover:bg-gray-800 transition-transform active:scale-95 flex items-center justify-center"
-                  disabled={isLoading}
+                  disabled={isLoading || vibeLoading}
                 >
-                  {isLoading ? (
+                  {isLoading || vibeLoading ? (
                     <Loader2 className="mr-2 h-6 w-6 animate-spin" />
                   ) : (
                     "Jump into Cravemate →"

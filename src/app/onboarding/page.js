@@ -35,7 +35,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-orange-50 flex flex-col items-center justify-center p-6">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-orange-100">
+      <div className="max-w-3xl w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-orange-100">
         <div className="bg-gray-100 h-2 w-full">
           <div
             className="bg-orange-600 h-full transition-all duration-500 ease-out"
