@@ -33,9 +33,7 @@ const DISH_IDEAS = {
   Caribbean: ["Jerk Chicken", "Ropa Vieja", "Cuban Sandwich"],
 };
 
-const FOOD_WORDS = Array.from(
-  new Set(Object.values(DISH_IDEAS).flat())
-);
+const FOOD_WORDS = Array.from(new Set(Object.values(DISH_IDEAS).flat()));
 
 export default function FavoritesStep() {
   const { favorites, setFavorites, setStep, profile } = useUserStore();
@@ -160,82 +158,91 @@ export default function FavoritesStep() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 h-[80vh] flex flex-col">
       <div className="space-y-2">
-        <h2 className="text-2xl font-bold text-neutral-900">Dial in your cravings</h2>
+        <h2 className="text-2xl font-bold text-neutral-900">
+          Dial in your cravings
+        </h2>
         <p className="text-neutral-500">
-          Choose the flavors you obsess over, then shout out the dishes you can’t stop ordering.
+          Choose the flavors you obsess over, then shout out the dishes you
+          can’t stop ordering.
         </p>
         {!profile.location && (
           <div className="rounded-xl border border-dashed border-yelp-red/30 bg-yelp-red/10 p-3 text-sm text-yelp-red">
-            Add your city or zip code in Step 1 to unlock Yelp-powered suggestions.
+            Add your city or zip code in Step 1 to unlock Yelp-powered
+            suggestions.
           </div>
         )}
       </div>
+      <div className="space-y-8 flex flex-col overflow-auto">
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-neutral-900">
+              Top cuisines
+            </h3>
+            <span className="text-sm text-neutral-500">
+              {selectedCuisines.length}/3 selected
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">{cuisineCards}</div>
+          {helperMessage && (
+            <p className="text-sm font-medium text-yelp-red">{helperMessage}</p>
+          )}
+        </section>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-neutral-900">Top cuisines</h3>
-          <span className="text-sm text-neutral-500">
-            {selectedCuisines.length}/3 selected
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-2">{cuisineCards}</div>
-        {helperMessage && (
-          <p className="text-sm font-medium text-yelp-red">{helperMessage}</p>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-neutral-900">Favorite foods</h3>
-          <p className="text-sm text-neutral-500">
-            Tap to select the dishes you crave most, or add your own.
-          </p>
-        </div>
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">{foodCloud}</div>
-          <div className="flex flex-wrap gap-2">
-            {selectedFoods.map((food) => (
-              <span
-                key={food}
-                className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-3 py-1 text-sm font-semibold text-white"
-              >
-                {food}
-                <button
-                  type="button"
-                  onClick={() => toggleFood(food)}
-                  className="text-white/80 hover:text-white"
+        <section className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold text-neutral-900">
+              Favorite foods
+            </h3>
+            <p className="text-sm text-neutral-500">
+              Tap to select the dishes you crave most, or add your own.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">{foodCloud}</div>
+            <div className="flex flex-wrap gap-2">
+              {selectedFoods.map((food) => (
+                <span
+                  key={food}
+                  className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-3 py-1 text-sm font-semibold text-white"
                 >
-                  ×
-                </button>
-              </span>
-            ))}
+                  {food}
+                  <button
+                    type="button"
+                    onClick={() => toggleFood(food)}
+                    className="text-white/80 hover:text-white"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
+              <input
+                type="text"
+                value={foodInput}
+                onChange={(e) => setFoodInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addFoodFromInput();
+                  }
+                }}
+                placeholder="Add a custom favorite (e.g. spicy miso ramen)"
+                className="flex-1 border-0 bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:ring-0"
+              />
+              <button
+                type="button"
+                onClick={addFoodFromInput}
+                className="rounded-full bg-neutral-900 px-3 py-1 text-sm font-semibold text-white transition hover:bg-neutral-800"
+              >
+                Add
+              </button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
-            <input
-              type="text"
-              value={foodInput}
-              onChange={(e) => setFoodInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addFoodFromInput();
-                }
-              }}
-              placeholder="Add a custom favorite (e.g. spicy miso ramen)"
-              className="flex-1 border-0 bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:ring-0"
-            />
-            <button
-              type="button"
-              onClick={addFoodFromInput}
-              className="rounded-full bg-neutral-900 px-3 py-1 text-sm font-semibold text-white transition hover:bg-neutral-800"
-            >
-              Add
-            </button>
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       <div className="flex flex-col gap-3 md:flex-row md:justify-between">
         <button

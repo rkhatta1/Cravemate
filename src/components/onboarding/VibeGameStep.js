@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/store/user-store";
 import { Loader2 } from "lucide-react";
@@ -29,119 +29,6 @@ const VIBE_TRAITS = {
     description: "You love clean counters, sharp service, and foods that hit the spot without the fuss.",
   },
 };
-
-const QUESTIONS = [
-  {
-    prompt: "Where would you go shopping for peanut butter?",
-    scenario: "You need the perfect jar for a foodie friend's gift basket.",
-    options: [
-      {
-        id: "artisan-pantr",
-        place: "Urban Nut Pantry",
-        review:
-          "Best artisan peanut butter in the city. Staff walks you through pairings like you're picking wine. Pricey, but an experience.",
-        vibe: "cozy",
-        keywords: "Hand-crafted, staff-led, story filled",
-      },
-      {
-        id: "tj-staples",
-        place: "Trader Joe's",
-        review:
-          "Clean ingredient list, priced right, never disappoints. I grab two jars because we go through them so fast.",
-        vibe: "efficient",
-        keywords: "Dependable, simple, practical",
-      },
-    ],
-  },
-  {
-    prompt: "Where do you caffeinate before a brainstorm?",
-    scenario: "45 minutes between meetings, laptop in tow.",
-    options: [
-      {
-        id: "analog-lounge",
-        place: "Analog 3rd Wave",
-        review:
-          "Event-level pour overs, vinyl spinning all day, and a barista who remembers everyone's project. Electric yet zen.",
-        vibe: "luxe",
-        keywords: "Design-forward, curated, intentional",
-      },
-      {
-        id: "late-macchiato",
-        place: "Fuel & Flour",
-        review:
-          "Open kitchen energy, sticky buns coming out nonstop, and power outlets at every communal table. Loud in the best way.",
-        vibe: "lively",
-        keywords: "Communal, high-energy, pastry-fueled",
-      },
-    ],
-  },
-  {
-    prompt: "Where are you grabbing late-night noodles?",
-    scenario: "It's after a show and the group chat is still lit.",
-    options: [
-      {
-        id: "steam-broth",
-        place: "Midnight Tonkotsu",
-        review:
-          "Broth simmered 18 hours, chef talks about the farms, and there's a seasonal pickle flight. Chill lighting, jazz playlist.",
-        vibe: "cozy",
-        keywords: "Slow food, intimate, soulful",
-      },
-      {
-        id: "karaoke-ramen",
-        place: "Riot Ramen Club",
-        review:
-          "Sake slushies, shared tables, someone always starts karaoke. The chili crisp hits like confetti.",
-        vibe: "lively",
-        keywords: "Party vibes, bold flavors, group-ready",
-      },
-    ],
-  },
-  {
-    prompt: "How do you celebrate a big win?",
-    scenario: "You just shipped a release and want to flex.",
-    options: [
-      {
-        id: "chef-counter",
-        place: "Counter & Co.",
-        review:
-          "12-course tasting, chef narrates every dish, the playlist is curated weekly. It's intimate but still playful.",
-        vibe: "luxe",
-        keywords: "Polished, exclusive, chef-driven",
-      },
-      {
-        id: "backyard-smoke",
-        place: "Smokestack Backyard",
-        review:
-          "Picnic tables, vinyl-only DJ, shareable platters that never end. Everyone leaves with smoked citrus on their clothes.",
-        vibe: "adventurous",
-        keywords: "Rustic, abundant, sensory",
-      },
-    ],
-  },
-  {
-    prompt: "Where would you plan a spontaneous picnic?",
-    scenario: "Blue-sky day, 20 minutes to grab provisions.",
-    options: [
-      {
-        id: "farmstand",
-        place: "Gathered Greens Market",
-        review:
-          "Everything is hyper-local, they stuff the tote with flowers, and the staff will point you to the best park bench.",
-        vibe: "cozy",
-        keywords: "Seasonal, conversational, neighborhood",
-      },
-      {
-        id: "global-street",
-        place: "Global Street Hall",
-        review:
-          "Ten rotating vendors, K-pop on big speakers, QR code ordering. Perfect for mixing bites and keeping it moving.",
-        vibe: "adventurous",
-        keywords: "Fast, eclectic, playful",
-      },
-    ],
-  },
-];
 
 const buildVibeReport = (answers) => {
   if (!answers.length) {
@@ -189,19 +76,32 @@ export default function VibeGameStep() {
     favorites,
     vibeGameAnswers,
     setVibeAnswers,
+    resetOnboarding,
     setStep,
+    setFavorites,
+    updateProfile,
+    setDietaryPrefs,
   } = useUserStore();
+  const [questions, setQuestions] = useState([]);
+  const [gameLoading, setGameLoading] = useState(false);
+  const [gameError, setGameError] = useState("");
+  const [vibeReport, setVibeReport] = useState({
+    headline: "Let's collect your vibe",
+    summary: "Work through the mini game to generate a shareable ambience profile.",
+    tags: [],
+  });
+  const [vibeLoading, setVibeLoading] = useState(false);
+  const [vibeError, setVibeError] = useState("");
+  const gameFetchRef = useRef(false);
+  const gameKeyRef = useRef("");
 
-  const totalRounds = QUESTIONS.length;
+  const alreadyFinished = session?.user?.hasFinishedOnboarding;
+  const totalRounds = Math.max(questions.length || 3, vibeGameAnswers.length || 0);
   const progress = (vibeGameAnswers.length / totalRounds) * 100;
-  const isComplete = vibeGameAnswers.length === totalRounds;
-  const currentQuestion = QUESTIONS[vibeGameAnswers.length];
+  const progressValue = alreadyFinished ? 100 : progress;
+  const isComplete = vibeGameAnswers.length === totalRounds || alreadyFinished;
+  const currentQuestion = questions[vibeGameAnswers.length];
   const router = useRouter();
-
-  const vibeReport = useMemo(
-    () => buildVibeReport(vibeGameAnswers),
-    [vibeGameAnswers]
-  );
 
   const handleSelect = (option) => {
     if (!currentQuestion) return;
@@ -210,7 +110,10 @@ export default function VibeGameStep() {
       scenario: currentQuestion.scenario,
       place: option.place,
       review: option.review,
-      vibe: option.vibe,
+      cuisine: currentQuestion.cuisine,
+      businessAlias: option.alias,
+      businessName: option.place,
+      vibe: option.vibe || "",
       keywords: option.keywords,
     };
     setVibeAnswers([...vibeGameAnswers, answerPayload]);
@@ -248,6 +151,7 @@ export default function VibeGameStep() {
 
       if (response.ok) {
         await update({ hasFinishedOnboarding: true });
+        resetOnboarding();
         router.push("/home");
       } else {
         // Handle error case
@@ -259,6 +163,161 @@ export default function VibeGameStep() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const loadGame = async () => {
+      if (!favorites?.cuisines?.length || !profile?.location) return;
+      if (alreadyFinished) return;
+      const key = JSON.stringify({
+        location: profile.location,
+        cuisines: favorites.cuisines.slice(0, 3),
+      });
+      if (gameKeyRef.current === key && questions.length) return;
+      if (gameFetchRef.current) return;
+      gameFetchRef.current = true;
+      gameKeyRef.current = key;
+      setGameLoading(true);
+      setGameError("");
+      try {
+        const response = await fetch("/api/onboarding/yelp-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cuisines: favorites.cuisines,
+            location: profile.location,
+            limitPerCuisine: 2,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.error || "Unable to load picks");
+        }
+        const businesses = (payload.businesses || []).slice(0, 6);
+
+        const deduped = [];
+        const seen = new Set();
+        for (const biz of businesses) {
+          const keyAlias = biz.alias || biz.id;
+          if (keyAlias && !seen.has(keyAlias)) {
+            seen.add(keyAlias);
+            deduped.push(biz);
+          }
+        }
+
+        const reviews = await Promise.all(
+          deduped.map(async (biz) => {
+            try {
+              const res = await fetch("/api/onboarding/yelp-review", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  alias: biz.alias,
+                  location: profile.location,
+                }),
+              });
+              const data = await res.json();
+              return {
+                ...biz,
+                review: data?.review || "",
+              };
+            } catch {
+              return { ...biz, review: "" };
+            }
+          })
+        );
+
+        const grouped = favorites.cuisines.slice(0, 3).map((cuisine) => {
+          const options = reviews.filter((biz) => biz.cuisine === cuisine).slice(0, 2);
+          return {
+            prompt: `Which ${cuisine} spot reads more like you?`,
+            scenario: "Pick the review that feels most your vibe. No names, no logos, just feel.",
+            cuisine,
+            options: options.map((opt, idx) => ({
+              id: `${opt.id || idx}`,
+              place: opt.name || "Hidden",
+              alias: opt.alias,
+              review:
+                opt.review ||
+                "Service-forward and flavorful without trying too hard. Locals know this is a go-to.",
+              keywords: cuisine,
+            })),
+          };
+        });
+
+        setQuestions(grouped.filter((q) => q.options.length >= 2));
+      } catch (error) {
+        console.error("load game error", error);
+        setGameError(error.message || "Failed to load the vibe game");
+      } finally {
+        setGameLoading(false);
+        gameFetchRef.current = false;
+      }
+    };
+
+    loadGame();
+  }, [favorites?.cuisines, profile?.location, questions.length, alreadyFinished]);
+
+  useEffect(() => {
+    const generateVibe = async () => {
+      if (!isComplete || alreadyFinished) return;
+      setVibeLoading(true);
+      setVibeError("");
+      try {
+        const response = await fetch("/api/onboarding/vibe-report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: profile.location,
+            dietaryPrefs,
+            cuisines: favorites?.cuisines || [],
+            foods: favorites?.foods || [],
+            gameRounds: questions,
+            answers: vibeGameAnswers,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.error || "Unable to generate vibe");
+        }
+        setVibeReport({
+          headline: "Your vibe is ready",
+          summary: payload.vibe,
+          secondary: "",
+          tags: [],
+        });
+      } catch (error) {
+        console.error("vibe report error", error);
+        setVibeError(error.message || "Failed to generate vibe report");
+        setVibeReport(buildVibeReport(vibeGameAnswers));
+      } finally {
+        setVibeLoading(false);
+      }
+    };
+    generateVibe();
+  }, [isComplete, profile.location, dietaryPrefs, favorites, questions, vibeGameAnswers, alreadyFinished]);
+
+  const effectiveQuestions = questions.length ? questions : [];
+  const showGame = !isComplete && currentQuestion;
+
+  useEffect(() => {
+    const hydrateFromDb = async () => {
+      try {
+        const res = await fetch("/api/user/onboarding");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.location) updateProfile({ location: data.location, username: data.username });
+        if (Array.isArray(data.dietaryPrefs)) setDietaryPrefs(data.dietaryPrefs);
+        if (data.favorites) setFavorites(data.favorites);
+        if (data.vibeReport) {
+          setVibeReport(data.vibeReport);
+          setVibeAnswers([]);
+        }
+      } catch (error) {
+        console.warn("Failed to hydrate onboarding", error);
+      }
+    };
+    hydrateFromDb();
+  }, [updateProfile, setDietaryPrefs, setFavorites, setVibeAnswers]);
 
   return (
     <div className="flex h-auto flex-col overflow-hidden bg-[#fff6ec]">
@@ -285,38 +344,57 @@ export default function VibeGameStep() {
         <div className="h-2 w-full rounded-full bg-gray-100">
         <div
           className="h-full rounded-full bg-orange-500 transition-all"
-          style={{ width: `${progress}%` }}
+          style={{ width: `${progressValue}%` }}
         />
       </div>
         <div className="flex-1 space-y-6 overflow-y-auto">
-          {!isComplete && currentQuestion && (
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-gray-100 bg-gradient-to-br from-orange-50 to-white p-6">
-                <p className="text-sm uppercase tracking-wide text-orange-600 font-semibold">
-                  Where would you…
+          {!isComplete && (
+            <>
+              {gameLoading && (
+                <div className="flex items-center gap-2 text-gray-500 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading picks from Yelp…
+                </div>
+              )}
+              {/* {gameError && (
+                <p className="text-sm text-red-500">{gameError}</p>
+              )} */}
+              {!gameLoading && !currentQuestion && (
+                <p className="text-sm text-gray-500">
+                  Add a location and at least one cuisine to play the vibe game.
                 </p>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {currentQuestion.prompt}
-                </h2>
-                <p className="text-gray-500 mt-2">{currentQuestion.scenario}</p>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                {currentQuestion.options.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => handleSelect(option)}
-                    className="text-left rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:border-orange-400 hover:shadow-md transition-all"
-                  >
-                    <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                      {option.place}
+              )}
+              {currentQuestion && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-gray-100 bg-gradient-to-br from-orange-50 to-white p-6">
+                    <p className="text-sm uppercase tracking-wide text-orange-600 font-semibold">
+                      Where would you…
                     </p>
-                    <p className="mt-2 text-gray-700 leading-relaxed">{option.review}</p>
-                    <p className="mt-4 text-sm text-gray-500">{option.keywords}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      {currentQuestion.prompt}
+                    </h2>
+                    <p className="text-gray-500 mt-2">{currentQuestion.scenario}</p>
+                    <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      {currentQuestion.cuisine}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {currentQuestion.options.map((option, idx) => (
+                      <button
+                        key={option.id}
+                        onClick={() => handleSelect(option)}
+                        className="text-left rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:border-orange-400 hover:shadow-md transition-all"
+                      >
+                        <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                          Option {idx + 1} · {currentQuestion.cuisine}
+                        </p>
+                        <p className="mt-2 text-gray-700 leading-relaxed">{option.review}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {isComplete && (
@@ -328,29 +406,44 @@ export default function VibeGameStep() {
                       <p className="text-sm uppercase tracking-wide text-orange-600 font-semibold">
                         Vibe report
                       </p>
-                      <h2 className="text-2xl font-bold text-gray-900">
+                      {/* <h2 className="text-2xl font-bold text-gray-900">
                         {vibeReport.headline}
-                      </h2>
+                      </h2> */}
                     </div>
-                    <button
+                    {/* <button
                       onClick={restartGame}
                       className="text-sm font-semibold text-gray-500 hover:text-gray-900"
                     >
                       Start over
-                    </button>
+                    </button> */}
                   </div>
-                  <p className="text-gray-600">{vibeReport.summary}</p>
-                  <p className="text-sm text-gray-500">{vibeReport.secondary}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {vibeReport.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full bg-orange-50 px-3 py-1 text-sm font-medium text-orange-700"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
+                  {vibeLoading && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Crafting your vibe…
+                    </div>
+                  )}
+                  {vibeError && (
+                    <p className="text-sm text-red-500">{vibeError}</p>
+                  )}
+                  {vibeReport.summary && (
+                    <p className="text-gray-600">{vibeReport.summary}</p>
+                  )}
+                  {vibeReport.secondary && (
+                    <p className="text-sm text-gray-500">{vibeReport.secondary}</p>
+                  )}
+                  {vibeReport.tags?.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {vibeReport.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full bg-orange-50 px-3 py-1 text-sm font-medium text-orange-700"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
