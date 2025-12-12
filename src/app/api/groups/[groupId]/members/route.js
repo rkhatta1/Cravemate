@@ -104,11 +104,11 @@ export async function POST(request, context) {
     },
   });
 
-  const context = buildGroupContextPayload(groupWithMembers);
+  const contextForGroup = buildGroupContextPayload(groupWithMembers);
 
   const updatedGroup = await prisma.group.update({
     where: { id: groupId },
-    data: { groupContext: context },
+    data: { groupContext: contextForGroup },
     include: {
       members: {
         include: {
