@@ -69,6 +69,7 @@ model Group {
   id              String        @id @default(cuid())
   name            String
   locationContext String
+  groupContext    Json?
   createdAt       DateTime      @default(now())
   members         GroupMember[]
   messages        Message[]

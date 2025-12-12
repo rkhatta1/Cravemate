@@ -2,7 +2,18 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "../../../auth/[...nextauth]/route";
-import { toClientGroup } from "@/lib/group-utils";
+import { toClientGroup, buildGroupContextPayload } from "@/lib/group-utils";
+
+const memberSelect = {
+  id: true,
+  name: true,
+  username: true,
+  email: true,
+  location: true,
+  dietaryPrefs: true,
+  favoritesContext: true,
+  vibeReport: true,
+};
 
 const getParams = async (context) => {
   if (!context?.params) return {};
@@ -46,7 +57,7 @@ export async function POST(request, context) {
 
   const targetUser = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, name: true, username: true },
+    select: memberSelect,
   });
 
   if (!targetUser) {
@@ -71,13 +82,13 @@ export async function POST(request, context) {
     },
   });
 
-  const updatedGroup = await prisma.group.findUnique({
+  const groupWithMembers = await prisma.group.findUnique({
     where: { id: groupId },
     include: {
       members: {
         include: {
           user: {
-            select: { id: true, name: true, username: true, email: true },
+            select: memberSelect,
           },
         },
       },
@@ -87,6 +98,32 @@ export async function POST(request, context) {
           sender: {
             select: { id: true, name: true, username: true },
           },
+          sharedEntry: true,
+        },
+      },
+    },
+  });
+
+  const context = buildGroupContextPayload(groupWithMembers);
+
+  const updatedGroup = await prisma.group.update({
+    where: { id: groupId },
+    data: { groupContext: context },
+    include: {
+      members: {
+        include: {
+          user: {
+            select: memberSelect,
+          },
+        },
+      },
+      messages: {
+        orderBy: { sentAt: "asc" },
+        include: {
+          sender: {
+            select: { id: true, name: true, username: true },
+          },
+          sharedEntry: true,
         },
       },
     },

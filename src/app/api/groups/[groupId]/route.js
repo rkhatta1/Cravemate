@@ -4,6 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import { toClientGroup } from "@/lib/group-utils";
 
+const memberSelect = {
+  id: true,
+  name: true,
+  username: true,
+  email: true,
+  location: true,
+  dietaryPrefs: true,
+  favoritesContext: true,
+  vibeReport: true,
+};
+
 const getParams = async (context) => {
   if (!context?.params) return {};
   return (typeof context.params.then === "function"
@@ -36,7 +47,7 @@ export async function PATCH(request, context) {
     where: { id: groupId },
     include: {
       members: {
-        include: { user: { select: { id: true } } },
+        include: { user: { select: memberSelect } },
       },
     },
   });
@@ -60,7 +71,7 @@ export async function PATCH(request, context) {
       members: {
         include: {
           user: {
-            select: { id: true, name: true, username: true, email: true },
+            select: memberSelect,
           },
         },
       },

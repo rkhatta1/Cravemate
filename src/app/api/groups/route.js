@@ -2,7 +2,41 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "../auth/[...nextauth]/route";
-import { toClientGroup } from "@/lib/group-utils";
+import { toClientGroup, buildGroupContextPayload } from "@/lib/group-utils";
+
+const memberSelect = {
+  id: true,
+  name: true,
+  username: true,
+  email: true,
+  location: true,
+  dietaryPrefs: true,
+  favoritesContext: true,
+  vibeReport: true,
+};
+
+const groupInclude = {
+  members: {
+    include: {
+      user: {
+        select: memberSelect,
+      },
+    },
+  },
+  messages: {
+    orderBy: { sentAt: "asc" },
+    include: {
+      sender: {
+        select: {
+          id: true,
+          name: true,
+          username: true,
+        },
+      },
+      sharedEntry: true,
+    },
+  },
+};
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -18,32 +52,7 @@ export async function GET() {
         },
       },
     },
-    include: {
-      members: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-            },
-          },
-        },
-      },
-      messages: {
-        orderBy: { sentAt: "asc" },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-            },
-          },
-          sharedEntry: true,
-        },
-      },
-    },
+    include: groupInclude,
     orderBy: {
       createdAt: "desc",
     },
@@ -73,7 +82,7 @@ export async function POST(request) {
 
   const userRecord = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { location: true },
+    select: memberSelect,
   });
 
   const resolvedLocation = locationContext || userRecord?.location;
@@ -101,35 +110,21 @@ export async function POST(request) {
         ],
       },
     },
-    include: {
-      members: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-            },
-          },
-        },
-      },
-      messages: {
-        orderBy: { sentAt: "asc" },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-            },
-          },
-          sharedEntry: true,
-        },
-      },
-    },
+    include: groupInclude,
+  });
+
+  const context = buildGroupContextPayload({
+    ...group,
+    locationContext: resolvedLocation,
+  });
+
+  const hydratedGroup = await prisma.group.update({
+    where: { id: group.id },
+    data: { groupContext: context },
+    include: groupInclude,
   });
 
   return NextResponse.json({
-    group: toClientGroup(group, session.user.id),
+    group: toClientGroup(hydratedGroup, session.user.id),
   });
 }

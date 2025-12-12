@@ -11,6 +11,7 @@ import EmptyConversation from "@/components/chat/EmptyConversation";
 import Sidebar from "@/components/chat/Sidebar";
 import ChatMessages from "@/components/chat/ChatMessages";
 import { useLocationAutocomplete } from "@/hooks/useLocationAutocomplete";
+import GroupProfileModal from "@/components/chat/GroupProfileModal";
 
 const GROUPS_CACHE_KEY = "cravemate-groups-cache";
 
@@ -23,6 +24,7 @@ export default function HomePage() {
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const groupsLoadedRef = useRef(false);
 
   const appendMessage = useCallback((groupsList, groupId, message, overrides = {}) => {
@@ -91,12 +93,13 @@ export default function HomePage() {
 
     async function loadGroups() {
       if (groupsLoadedRef.current) return;
-      if (groups.length) {
+      const needsRefresh = groups.some((group) => !group.memberDetails);
+      if (groups.length && !needsRefresh) {
         groupsLoadedRef.current = true;
         setIsLoadingGroups(false);
         return;
       }
-      setIsLoadingGroups((prev) => (!groups.length ? true : prev));
+      setIsLoadingGroups((prev) => (!groups.length || needsRefresh ? true : prev));
       setLoadError("");
       try {
         const response = await fetch("/api/groups");
@@ -129,7 +132,7 @@ export default function HomePage() {
     return () => {
       isCancelled = true;
     };
-  }, [status]);
+  }, [status, groups]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -440,7 +443,12 @@ export default function HomePage() {
                   <PanelLeft size={20} />
                 </button>
                 <div className="flex flex-col">
-                  <div className="flex items-center gap-2 font-bold text-gray-900">
+                  <button
+                    type="button"
+                    onClick={() => setProfileModalOpen(true)}
+                    className="flex items-center gap-2 text-left font-bold text-gray-900 transition hover:text-gray-700"
+                    title="View group profile"
+                  >
                     <span className="flex items-center gap-1">
                       <span className="text-gray-400">#</span>
                       {activeGroup.name}
@@ -451,7 +459,7 @@ export default function HomePage() {
                         {activeGroup.locationContext}
                       </span>
                     )}
-                  </div>
+                  </button>
                   <div className="flex items-center gap-3 text-xs text-gray-500">
                     <span>{activeParticipants.length} members · includes @yelp</span>
                     {!activeGroup.locationContext && (
@@ -806,6 +814,12 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      <GroupProfileModal
+        open={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        group={activeGroup}
+      />
     </div>
   );
 }
