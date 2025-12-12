@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { useUserStore } from "@/store/user-store";
 import { useLocationAutocomplete } from "@/hooks/useLocationAutocomplete";
 import { Loader2 } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 const DIETARY_OPTIONS = [
   "Vegetarian", "Vegan", "Gluten-Free", "Halal", "Kosher", "Pescatarian", "Keto", "Nut-Free"
 ];
 
 export default function BasicProfileStep() {
+  const { data: session, update } = useSession();
   const { profile, dietaryPrefs, setDietaryPrefs, setStep, updateProfile } = useUserStore();
   
   // Local state for immediate inputs
@@ -41,6 +43,15 @@ export default function BasicProfileStep() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [clearLocationSuggestions]);
 
+  useEffect(() => {
+    if (!session?.user) return;
+    if (!username && session.user.username) setUsername(session.user.username);
+    if (!location && session.user.location) setLocation(session.user.location);
+    if (!dietaryPrefs?.length && Array.isArray(session.user.dietaryPrefs)) {
+      setDietaryPrefs(session.user.dietaryPrefs);
+    }
+  }, [session, username, location, dietaryPrefs, setDietaryPrefs]);
+
   const toggleDiet = (option) => {
     if (dietaryPrefs.includes(option)) {
       setDietaryPrefs(dietaryPrefs.filter((i) => i !== option));
@@ -53,6 +64,11 @@ export default function BasicProfileStep() {
     if (!location || !username) return alert("Please fill in required fields");
     
     updateProfile({ username, location });
+    update({
+      username,
+      location,
+      dietaryPrefs,
+    });
     setStep(2); 
   };
 

@@ -62,6 +62,8 @@ export const authOptions = {
         token.username = user.username;
         token.hasFinishedOnboarding = !!user.hasFinishedOnboarding;
         token.location = user.location;
+        token.dietaryPrefs = user.dietaryPrefs;
+        token.favoritesContext = user.favoritesContext;
 
         try {
           const dbUser = await prisma.user.findUnique({
@@ -69,12 +71,17 @@ export const authOptions = {
             select: {
               username: true,
               location: true,
+              dietaryPrefs: true,
+              favoritesContext: true,
               hasFinishedOnboarding: true,
             },
           });
           if (dbUser) {
             token.username = dbUser.username ?? token.username;
             token.location = dbUser.location ?? token.location;
+            token.dietaryPrefs = dbUser.dietaryPrefs ?? token.dietaryPrefs;
+            token.favoritesContext =
+              dbUser.favoritesContext ?? token.favoritesContext;
             token.hasFinishedOnboarding = !!dbUser.hasFinishedOnboarding;
           }
         } catch (error) {
@@ -98,6 +105,12 @@ export const authOptions = {
         if (typeof session.username !== "undefined") {
           token.username = session.username || "";
         }
+        if (typeof session.dietaryPrefs !== "undefined") {
+          token.dietaryPrefs = session.dietaryPrefs || [];
+        }
+        if (typeof session.favoritesContext !== "undefined") {
+          token.favoritesContext = session.favoritesContext || null;
+        }
       }
 
       // Ensure it's at least a boolean
@@ -114,6 +127,8 @@ export const authOptions = {
         session.user.username = token.username;
         session.user.hasFinishedOnboarding = !!token.hasFinishedOnboarding;
         session.user.location = token.location || "";
+        session.user.dietaryPrefs = token.dietaryPrefs || [];
+        session.user.favoritesContext = token.favoritesContext || null;
       }
       return session;
     },

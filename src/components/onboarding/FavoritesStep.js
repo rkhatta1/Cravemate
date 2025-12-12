@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useUserStore } from "@/store/user-store";
+import { useSession } from "next-auth/react";
 
 const CUISINE_OPTIONS = [
   "Mexican",
@@ -36,6 +37,7 @@ const DISH_IDEAS = {
 const FOOD_WORDS = Array.from(new Set(Object.values(DISH_IDEAS).flat()));
 
 export default function FavoritesStep() {
+  const { update } = useSession();
   const { favorites, setFavorites, setStep, profile } = useUserStore();
 
   const [selectedCuisines, setSelectedCuisines] = useState(
@@ -105,6 +107,12 @@ export default function FavoritesStep() {
     setFavorites({
       cuisines: selectedCuisines,
       foods: selectedFoods,
+    });
+    update({
+      favoritesContext: {
+        cuisines: selectedCuisines,
+        foods: selectedFoods,
+      },
     });
     setStep(3);
   };

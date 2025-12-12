@@ -304,24 +304,33 @@ export default function VibeGameStep() {
   const showGame = !isComplete && currentQuestion;
 
   useEffect(() => {
-    const hydrateFromDb = async () => {
-      try {
-        const res = await fetch("/api/user/onboarding");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.location) updateProfile({ location: data.location, username: data.username });
-        if (Array.isArray(data.dietaryPrefs)) setDietaryPrefs(data.dietaryPrefs);
-        if (data.favorites) setFavorites(data.favorites);
-        if (data.vibeReport) {
-          setVibeReport(data.vibeReport);
-          setVibeAnswers([]);
-        }
-      } catch (error) {
-        console.warn("Failed to hydrate onboarding", error);
-      }
-    };
-    hydrateFromDb();
-  }, [updateProfile, setDietaryPrefs, setFavorites, setVibeAnswers]);
+    // Hydrate onboarding state from session progress (DB is only written on finish).
+    if (!session?.user) return;
+    if (!profile.location && session.user.location) {
+      updateProfile({ location: session.user.location });
+    }
+    if (!profile.username && session.user.username) {
+      updateProfile({ username: session.user.username });
+    }
+    if (!dietaryPrefs?.length && Array.isArray(session.user.dietaryPrefs)) {
+      setDietaryPrefs(session.user.dietaryPrefs);
+    }
+    if (
+      !(favorites?.cuisines?.length || favorites?.foods?.length) &&
+      session.user.favoritesContext
+    ) {
+      setFavorites(session.user.favoritesContext);
+    }
+  }, [
+    session,
+    profile.location,
+    profile.username,
+    dietaryPrefs,
+    favorites,
+    updateProfile,
+    setDietaryPrefs,
+    setFavorites,
+  ]);
 
   return (
     <div className="flex max-h-[80vh] flex-col rounded-xl overflow-hidden bg-[#fff6ec]">
