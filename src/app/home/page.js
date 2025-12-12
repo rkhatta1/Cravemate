@@ -13,6 +13,7 @@ import ChatMessages from "@/components/chat/ChatMessages";
 import InvitePlannerModal from "@/components/chat/InvitePlannerModal";
 import { useLocationAutocomplete } from "@/hooks/useLocationAutocomplete";
 import GroupProfileModal from "@/components/chat/GroupProfileModal";
+import { buildInviteMessageContent } from "@/lib/invite-utils";
 
 const GROUPS_CACHE_KEY = "cravemate-groups-cache";
 const INVITE_PLANNER_DEFAULT = {
@@ -24,59 +25,6 @@ const INVITE_PLANNER_DEFAULT = {
   error: "",
   isSubmitting: false,
 };
-
-const normalizeInviteRestaurant = (context = {}) => {
-  const business = context.business;
-  const entry = context.entry;
-  const parseCategories = () => {
-    if (Array.isArray(business?.categories)) {
-      return business.categories
-        .map((category) => {
-          if (!category) return "";
-          if (typeof category === "string") return category;
-          return category.title || category.alias || category.name || "";
-        })
-        .filter(Boolean);
-    }
-    if (Array.isArray(entry?.meta?.categories)) return entry.meta.categories;
-    if (entry?.meta?.category) return [entry.meta.category];
-    return [];
-  };
-
-  return {
-    name: business?.name || entry?.businessName || "Restaurant",
-    address:
-      business?.address ||
-      entry?.meta?.address ||
-      entry?.neighborhood ||
-      "",
-    neighborhood: entry?.neighborhood || "",
-    blurb: entry?.blurb || "",
-    image: business?.image_url || entry?.meta?.image || "",
-    url: business?.url || entry?.meta?.url || "",
-    price: business?.price || entry?.meta?.price || "",
-    rating: business?.rating || entry?.meta?.rating || "",
-    reviewCount: business?.review_count || entry?.meta?.reviewCount || "",
-    categories: parseCategories(),
-    entryId: entry?.id || null,
-    leaderboardId: entry?.leaderboardId || null,
-    businessId: business?.id || null,
-    source: context?.source || null,
-  };
-};
-
-const buildInviteMessageContent = (context, schedule) =>
-  JSON.stringify({
-    type: "dining-invite",
-    restaurant: normalizeInviteRestaurant(context),
-    schedule,
-    source: context?.source || "chat",
-    context: {
-      messageId: context?.messageId || null,
-      entryId: context?.entry?.id || null,
-      businessId: context?.business?.id || null,
-    },
-  });
 
 export default function HomePage() {
   const { data: session, status } = useSession();
@@ -434,14 +382,67 @@ export default function HomePage() {
       return;
     }
 
+    const startDate = new Date(`${invitePlanner.date}T${invitePlanner.startTime}`);
+    const endDate = new Date(`${invitePlanner.date}T${invitePlanner.endTime}`);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      setInvitePlanner((prev) => ({
+        ...prev,
+        error: "Provide valid start and end times.",
+      }));
+      return;
+    }
+    if (endDate <= startDate) {
+      setInvitePlanner((prev) => ({
+        ...prev,
+        error: "End time must be after start time.",
+      }));
+      return;
+    }
+
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     const schedule = {
       date: invitePlanner.date,
       startTime: invitePlanner.startTime,
       endTime: invitePlanner.endTime,
+      timezone,
+      startISO: startDate.toISOString(),
+      endISO: endDate.toISOString(),
     };
-    const content = buildInviteMessageContent(invitePlanner.context, schedule);
 
     setInvitePlanner((prev) => ({ ...prev, isSubmitting: true, error: "" }));
+
+    let calendarEvent = null;
+    try {
+      console.log("[invite] requesting calendar event", {
+        context: invitePlanner.context,
+        schedule,
+      });
+      const calendarResponse = await fetch("/api/calendar/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context: invitePlanner.context, schedule }),
+      });
+      const calendarPayload = await calendarResponse.json();
+      console.log("[invite] calendar API response", {
+        ok: calendarResponse.ok,
+        status: calendarResponse.status,
+        payload: calendarPayload,
+      });
+      if (!calendarResponse.ok) {
+        throw new Error(calendarPayload?.error || "Failed to create calendar event");
+      }
+      calendarEvent = calendarPayload.event || null;
+    } catch (error) {
+      setInvitePlanner((prev) => ({
+        ...prev,
+        isSubmitting: false,
+        error: error.message || "Unable to create calendar event",
+      }));
+      return;
+    }
+
+    const content = buildInviteMessageContent(invitePlanner.context, schedule, calendarEvent);
+
     try {
       const response = await fetch(`/api/groups/${activeGroupId}/messages`, {
         method: "POST",
@@ -449,6 +450,11 @@ export default function HomePage() {
         body: JSON.stringify({ content }),
       });
       const payload = await response.json();
+      console.log("[invite] chat message response", {
+        ok: response.ok,
+        status: response.status,
+        payload,
+      });
       if (!response.ok) {
         throw new Error(payload?.error || "Failed to send invite");
       }
@@ -597,7 +603,8 @@ export default function HomePage() {
         month: "short",
         day: "numeric",
       });
-      return `${dateLabel} · ${start} - ${end}`;
+      const timezoneLabel = schedule.timezone ? ` (${schedule.timezone})` : "";
+      return `${dateLabel} · ${start} - ${end}${timezoneLabel}`;
     } catch {
       return `${schedule.date} · ${start} - ${end}`;
     }

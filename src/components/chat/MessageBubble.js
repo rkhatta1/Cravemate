@@ -42,7 +42,8 @@ const formatInviteScheduleLabel = (schedule) => {
       month: "short",
       day: "numeric",
     });
-    return `${dateLabel} · ${start} - ${end}`;
+    const tz = schedule.timezone ? ` (${schedule.timezone})` : "";
+    return `${dateLabel} · ${start} - ${end}${tz}`;
   } catch {
     return `${schedule.date} · ${start} - ${end}`;
   }
@@ -183,6 +184,16 @@ const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite })
                 className="inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
               >
                 View details
+              </a>
+            )}
+            {invitePayload.event?.htmlLink && (
+              <a
+                href={invitePayload.event.htmlLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-700 hover:border-gray-300"
+              >
+                Open calendar
               </a>
             )}
           </div>
