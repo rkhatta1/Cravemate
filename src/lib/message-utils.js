@@ -22,6 +22,23 @@ export const getMessagePreview = (message, limit = 80) => {
   if (message.sharedEntry) {
     return `Shared ${message.sharedEntry.businessName}`;
   }
+  if (!message.isYelpResponse && typeof message.content === "string") {
+    try {
+      const parsed = JSON.parse(message.content);
+      if (parsed?.type === "dining-invite") {
+        const inviteName = parsed.restaurant?.name || "Group invite";
+        const inviteDate = parsed.schedule?.date
+          ? new Date(`${parsed.schedule.date}T00:00:00`).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+            })
+          : "";
+        return `Invite: ${inviteName}${inviteDate ? ` (${inviteDate})` : ""}`;
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
   let text = message.content || "";
   if (message.isYelpResponse) {
     const payload = parseYelpContent(message.content);

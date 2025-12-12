@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import MessageBubble from "./MessageBubble";
 
-const ChatMessages = ({ messages }) => {
+const ChatMessages = ({ messages, onSendInvite, onRespondToInvite }) => {
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -21,6 +21,8 @@ const ChatMessages = ({ messages }) => {
             safeMessages[index - 1]?.sender?.id === message.sender?.id &&
             !message.isYelpResponse
           }
+          onSendInvite={onSendInvite}
+          onRespondToInvite={onRespondToInvite}
         />
       ))}
       <div ref={endRef} />

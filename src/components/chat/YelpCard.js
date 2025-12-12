@@ -1,6 +1,7 @@
 import React from "react";
+import SendInviteButton from "./SendInviteButton";
 
-const YelpCard = ({ business }) => {
+const YelpCard = ({ business, onSendInvite }) => {
   if (!business) return null;
   const categories = Array.isArray(business.categories) ? business.categories : [];
 
@@ -18,16 +19,23 @@ const YelpCard = ({ business }) => {
       {business.address && (
         <p className="mt-1 text-xs text-neutral-500">{business.address}</p>
       )}
-      {business.url && (
-        <a
-          href={business.url}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 inline-flex text-xs font-semibold text-yelp-red hover:text-yelp-dark"
-        >
-          View on Yelp →
-        </a>
-      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {business.url && (
+          <a
+            href={business.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex text-xs font-semibold text-yelp-red hover:text-yelp-dark"
+          >
+            View on Yelp →
+          </a>
+        )}
+        <SendInviteButton
+          size="sm"
+          onClick={() => onSendInvite?.(business)}
+          disabled={!onSendInvite}
+        />
+      </div>
     </div>
   );
 };

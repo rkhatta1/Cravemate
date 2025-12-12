@@ -5,15 +5,78 @@ import { useSession, signOut } from "next-auth/react";
 import { useSocket } from "@/hooks/useSocket";
 import { useRouter } from "next/navigation";
 import { getMessagePreview } from "@/lib/message-utils";
-import { PlusCircle, Send, MapPin, PanelLeft, Loader2 } from "lucide-react";
+import { PlusCircle, Send, MapPin, PanelLeft, Loader2, CalendarDays } from "lucide-react";
 import EmptyState from "@/components/chat/EmptyState";
 import EmptyConversation from "@/components/chat/EmptyConversation";
 import Sidebar from "@/components/chat/Sidebar";
 import ChatMessages from "@/components/chat/ChatMessages";
+import InvitePlannerModal from "@/components/chat/InvitePlannerModal";
 import { useLocationAutocomplete } from "@/hooks/useLocationAutocomplete";
 import GroupProfileModal from "@/components/chat/GroupProfileModal";
 
 const GROUPS_CACHE_KEY = "cravemate-groups-cache";
+const INVITE_PLANNER_DEFAULT = {
+  open: false,
+  context: null,
+  date: "",
+  startTime: "",
+  endTime: "",
+  error: "",
+  isSubmitting: false,
+};
+
+const normalizeInviteRestaurant = (context = {}) => {
+  const business = context.business;
+  const entry = context.entry;
+  const parseCategories = () => {
+    if (Array.isArray(business?.categories)) {
+      return business.categories
+        .map((category) => {
+          if (!category) return "";
+          if (typeof category === "string") return category;
+          return category.title || category.alias || category.name || "";
+        })
+        .filter(Boolean);
+    }
+    if (Array.isArray(entry?.meta?.categories)) return entry.meta.categories;
+    if (entry?.meta?.category) return [entry.meta.category];
+    return [];
+  };
+
+  return {
+    name: business?.name || entry?.businessName || "Restaurant",
+    address:
+      business?.address ||
+      entry?.meta?.address ||
+      entry?.neighborhood ||
+      "",
+    neighborhood: entry?.neighborhood || "",
+    blurb: entry?.blurb || "",
+    image: business?.image_url || entry?.meta?.image || "",
+    url: business?.url || entry?.meta?.url || "",
+    price: business?.price || entry?.meta?.price || "",
+    rating: business?.rating || entry?.meta?.rating || "",
+    reviewCount: business?.review_count || entry?.meta?.reviewCount || "",
+    categories: parseCategories(),
+    entryId: entry?.id || null,
+    leaderboardId: entry?.leaderboardId || null,
+    businessId: business?.id || null,
+    source: context?.source || null,
+  };
+};
+
+const buildInviteMessageContent = (context, schedule) =>
+  JSON.stringify({
+    type: "dining-invite",
+    restaurant: normalizeInviteRestaurant(context),
+    schedule,
+    source: context?.source || "chat",
+    context: {
+      messageId: context?.messageId || null,
+      entryId: context?.entry?.id || null,
+      businessId: context?.business?.id || null,
+    },
+  });
 
 export default function HomePage() {
   const { data: session, status } = useSession();
@@ -181,7 +244,9 @@ export default function HomePage() {
     email: "",
     error: "",
     isSubmitting: false,
+    context: null,
   });
+  const [invitePlanner, setInvitePlanner] = useState(() => ({ ...INVITE_PLANNER_DEFAULT }));
   const [locationModal, setLocationModal] = useState({
     open: false,
     location: "",
@@ -303,18 +368,136 @@ export default function HomePage() {
     }
   };
 
-  const openInviteModal = () => {
-    if (!activeGroupId) return;
-    setInviteModal({
-      open: true,
-      email: "",
-      error: "",
-      isSubmitting: false,
-    });
-  };
+  const openInviteModal = useCallback(
+    (context = null) => {
+      if (!activeGroupId) return;
+      setInviteModal({
+        open: true,
+        email: "",
+        error: "",
+        isSubmitting: false,
+        context,
+      });
+    },
+    [activeGroupId]
+  );
 
   const closeInviteModal = () =>
-    setInviteModal((prev) => ({ ...prev, open: false }));
+    setInviteModal((prev) => ({ ...prev, open: false, context: null }));
+
+  const handleSendInviteIntent = useCallback(
+    (inviteContext) => {
+      if (!activeGroupId) return;
+      setInvitePlanner({
+        open: true,
+        context: inviteContext || null,
+        date: "",
+        startTime: "",
+        endTime: "",
+        error: "",
+        isSubmitting: false,
+      });
+    },
+    [activeGroupId]
+  );
+
+  const closeInvitePlanner = () => setInvitePlanner({ ...INVITE_PLANNER_DEFAULT });
+
+  const handleInvitePlannerFieldChange = (field, value) => {
+    setInvitePlanner((prev) => ({
+      ...prev,
+      [field]: value,
+      error: "",
+    }));
+  };
+
+  const handleInvitePlannerSubmit = async () => {
+    if (!invitePlanner.context) {
+      setInvitePlanner((prev) => ({
+        ...prev,
+        error: "Pick a restaurant to send with this invite.",
+      }));
+      return;
+    }
+    if (!invitePlanner.date || !invitePlanner.startTime || !invitePlanner.endTime) {
+      setInvitePlanner((prev) => ({
+        ...prev,
+        error: "Pick a date plus start/end times.",
+      }));
+      return;
+    }
+    if (!activeGroupId) {
+      setInvitePlanner((prev) => ({
+        ...prev,
+        error: "Select a chat before sending invites.",
+      }));
+      return;
+    }
+
+    const schedule = {
+      date: invitePlanner.date,
+      startTime: invitePlanner.startTime,
+      endTime: invitePlanner.endTime,
+    };
+    const content = buildInviteMessageContent(invitePlanner.context, schedule);
+
+    setInvitePlanner((prev) => ({ ...prev, isSubmitting: true, error: "" }));
+    try {
+      const response = await fetch(`/api/groups/${activeGroupId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to send invite");
+      }
+      const message = payload.message;
+      setGroups((prev) => appendMessage(prev, activeGroupId, message));
+      socketRef.current?.emit("chat:send", message);
+      closeInvitePlanner();
+    } catch (error) {
+      setInvitePlanner((prev) => ({
+        ...prev,
+        error: error.message || "Failed to send invite",
+      }));
+    } finally {
+      setInvitePlanner((prev) => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
+  const handleInviteResponse = useCallback(
+    async ({ decision, invite }) => {
+      if (!activeGroupId || !invite) return;
+      const restaurantName = invite?.restaurant?.name || "this plan";
+      const scheduleLabel = formatInviteSchedule(invite?.schedule);
+      const decisionLabel = decision === "accept" ? "is in for" : "can't make";
+      const userName = session?.user?.name || "Someone";
+      const content = `${userName} ${decisionLabel} ${restaurantName}${
+        scheduleLabel ? ` on ${scheduleLabel}` : ""
+      }.`;
+      try {
+        const response = await fetch(`/api/groups/${activeGroupId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.error || "Failed to send response");
+        }
+        const message = payload.message;
+        setGroups((prev) => appendMessage(prev, activeGroupId, message));
+        socketRef.current?.emit("chat:send", message);
+      } catch (error) {
+        console.error("Invite response error:", error);
+        if (typeof window !== "undefined") {
+          window.alert(error.message || "Unable to respond to invite right now.");
+        }
+      }
+    },
+    [activeGroupId, appendMessage, session?.user?.name, socketRef]
+  );
 
   const handleInvite = async () => {
     if (!inviteModal.email.trim()) {
@@ -404,6 +587,22 @@ export default function HomePage() {
     return region ? `${city}, ${region}` : city;
   };
 
+  const formatInviteSchedule = (schedule) => {
+    if (!schedule?.date) return "";
+    const start = schedule.startTime || "--";
+    const end = schedule.endTime || "--";
+    try {
+      const dateLabel = new Date(`${schedule.date}T00:00:00`).toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      });
+      return `${dateLabel} · ${start} - ${end}`;
+    } catch {
+      return `${schedule.date} · ${start} - ${end}`;
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-white">
       <Sidebar
@@ -491,7 +690,11 @@ export default function HomePage() {
               </div>
             </div>
 
-            <ChatMessages messages={activeMessages} />
+            <ChatMessages
+              messages={activeMessages}
+              onSendInvite={handleSendInviteIntent}
+              onRespondToInvite={handleInviteResponse}
+            />
 
             <form
               className="border-t border-gray-100 bg-white p-4"
@@ -681,6 +884,19 @@ export default function HomePage() {
         </div>
       )}
 
+      <InvitePlannerModal
+        open={invitePlanner.open}
+        context={invitePlanner.context}
+        date={invitePlanner.date}
+        startTime={invitePlanner.startTime}
+        endTime={invitePlanner.endTime}
+        error={invitePlanner.error}
+        onFieldChange={handleInvitePlannerFieldChange}
+        onSubmit={handleInvitePlannerSubmit}
+        onCancel={closeInvitePlanner}
+        isSubmitting={invitePlanner.isSubmitting}
+      />
+
       {inviteModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
@@ -690,6 +906,29 @@ export default function HomePage() {
                 Enter the email tied to their Cravemate account to drop them into the conversation.
               </p>
             </div>
+
+            {inviteModal.context && (
+              <div className="mt-5 rounded-2xl border border-gray-100 bg-neutral-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  Invite context
+                </p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {inviteModal.context.business?.name || inviteModal.context.entry?.businessName || "Saved restaurant"}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {inviteModal.context.business?.address ||
+                    inviteModal.context.entry?.neighborhood ||
+                    inviteModal.context.entry?.meta?.address ||
+                    "Shared from chat"}
+                </p>
+                {inviteModal.context?.schedule && (
+                  <p className="mt-2 flex items-center gap-1 text-xs text-gray-500">
+                    <CalendarDays size={12} />
+                    {formatInviteSchedule(inviteModal.context.schedule)}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="mt-5 space-y-4">
               <div>

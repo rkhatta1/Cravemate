@@ -1,6 +1,8 @@
 import React from "react";
 import { parseYelpContent } from "@/lib/message-utils";
+import { CalendarDays, MapPin } from "lucide-react";
 import YelpCard from "./YelpCard";
+import SendInviteButton from "./SendInviteButton";
 
 const AvatarPlaceholder = ({ children }) => (
   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-200 text-sm font-bold text-neutral-900 shadow-sm">
@@ -17,7 +19,36 @@ const formatTimeLabel = (isoString) => {
   }
 };
 
-const MessageBubble = ({ message, isSequence }) => {
+const parseInviteContent = (content) => {
+  if (!content) return null;
+  if (typeof content === "object") {
+    return content?.type === "dining-invite" ? content : null;
+  }
+  try {
+    const parsed = JSON.parse(content);
+    return parsed?.type === "dining-invite" ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const formatInviteScheduleLabel = (schedule) => {
+  if (!schedule?.date) return "";
+  const start = schedule.startTime || "--";
+  const end = schedule.endTime || "--";
+  try {
+    const dateLabel = new Date(`${schedule.date}T00:00:00`).toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+    return `${dateLabel} · ${start} - ${end}`;
+  } catch {
+    return `${schedule.date} · ${start} - ${end}`;
+  }
+};
+
+const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite }) => {
   if (!message) return null;
 
   const isSelf = Boolean(message.sender?.isSelf);
@@ -26,7 +57,27 @@ const MessageBubble = ({ message, isSequence }) => {
   const showAvatar = !isSelf && !isSequence;
   const avatarContent = isYelp ? "Y" : senderName?.[0] || "?";
   const payload = isYelp ? parseYelpContent(message.content) : null;
+  const invitePayload = !isYelp ? parseInviteContent(message.content) : null;
   const timeLabel = formatTimeLabel(message.sentAt);
+
+  const emitInviteEvent = (payload) => {
+    if (typeof onSendInvite !== "function") return;
+    onSendInvite({
+      ...payload,
+      messageId: message.id,
+      groupId: message.groupId,
+    });
+  };
+
+  const emitInviteResponse = (decision) => {
+    if (!invitePayload || typeof onRespondToInvite !== "function") return;
+    onRespondToInvite({
+      decision,
+      invite: invitePayload,
+      messageId: message.id,
+      groupId: message.groupId,
+    });
+  };
 
   if (isYelp) {
     return (
@@ -49,11 +100,113 @@ const MessageBubble = ({ message, isSequence }) => {
           {payload?.businesses?.length > 0 && (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {payload.businesses.slice(0, 3).map((biz) => (
-                <YelpCard key={biz.id || biz.name} business={biz} />
+                <YelpCard
+                  key={biz.id || biz.name}
+                  business={biz}
+                  onSendInvite={(business) =>
+                    emitInviteEvent({
+                      source: "yelp-recommendation",
+                      business,
+                    })
+                  }
+                />
               ))}
             </div>
           )}
           <p className="mt-2 text-[10px] text-neutral-500">@yelp · {timeLabel}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (invitePayload) {
+    const restaurant = invitePayload.restaurant || {};
+    const scheduleLabel = formatInviteScheduleLabel(invitePayload.schedule);
+    const categoriesLabel = Array.isArray(restaurant.categories)
+      ? restaurant.categories.join(" • ")
+      : "";
+
+    return (
+      <div
+        className={`group flex gap-3 ${isSelf ? "justify-end" : "justify-start"} ${
+          isSequence ? "mt-1" : "mt-4"
+        }`}
+      >
+        <div className={showAvatar ? "" : "w-10"}>
+          {showAvatar && <AvatarPlaceholder>{avatarContent}</AvatarPlaceholder>}
+        </div>
+        <div className="max-w-xl rounded-2xl border border-indigo-100 bg-white px-4 py-4 text-sm shadow">
+          {!isSelf && !isSequence && (
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">
+              {senderName} shared a meetup
+            </p>
+          )}
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-lg font-semibold text-gray-900">{restaurant.name || "Invite"}</p>
+              {restaurant.address && (
+                <p className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                  <MapPin size={12} />
+                  {restaurant.address}
+                </p>
+              )}
+              {categoriesLabel && (
+                <p className="mt-1 text-xs text-gray-400">{categoriesLabel}</p>
+              )}
+            </div>
+            {restaurant.image && (
+              <div className="hidden h-16 w-16 overflow-hidden rounded-2xl bg-gray-100 sm:block">
+                <img
+                  src={restaurant.image}
+                  alt={restaurant.name}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            )}
+          </div>
+          {scheduleLabel && (
+            <p className="mt-3 inline-flex items-center gap-1 rounded-xl bg-neutral-50 px-3 py-1 text-xs font-semibold text-gray-600">
+              <CalendarDays size={14} />
+              {scheduleLabel}
+            </p>
+          )}
+          {restaurant.blurb && (
+            <p className="mt-3 text-sm text-neutral-600">{restaurant.blurb}</p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {restaurant.url && (
+              <a
+                href={restaurant.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
+              >
+                View details
+              </a>
+            )}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => emitInviteResponse("accept")}
+              disabled={isSelf || typeof onRespondToInvite !== "function"}
+              className="rounded-2xl bg-yelp-red px-4 py-2 text-xs font-semibold text-white shadow hover:bg-yelp-dark disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Accept
+            </button>
+            <button
+              type="button"
+              onClick={() => emitInviteResponse("reject")}
+              disabled={isSelf || typeof onRespondToInvite !== "function"}
+              className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700 transition hover:border-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Reject
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-neutral-400">
+            {isSelf ? "You" : senderName} · {timeLabel}
+          </p>
         </div>
       </div>
     );
@@ -103,16 +256,27 @@ const MessageBubble = ({ message, isSequence }) => {
               {shared.meta.price || "price TBD"}
             </p>
           ) : null}
-          {shared.meta?.url && (
-            <a
-              href={shared.meta.url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
-            >
-              View on Yelp
-            </a>
-          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {shared.meta?.url && (
+              <a
+                href={shared.meta.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
+              >
+                View on Yelp
+              </a>
+            )}
+            <SendInviteButton
+              size="sm"
+              onClick={() =>
+                emitInviteEvent({
+                  source: "shared-leaderboard-entry",
+                  entry: shared,
+                })
+              }
+            />
+          </div>
           <p className="mt-2 text-[10px] text-neutral-400">
             {isSelf ? "You" : senderName} · {timeLabel}
           </p>
