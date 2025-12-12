@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useSocket } from "@/hooks/useSocket";
 import { useRouter } from "next/navigation";
 import { getMessagePreview } from "@/lib/message-utils";
-import { PlusCircle, Send, MapPin, PanelLeft, Loader2, CalendarDays } from "lucide-react";
+import { PlusCircle, Send, MapPin, PanelLeft, Loader2, CalendarDays, X } from "lucide-react";
 import EmptyState from "@/components/chat/EmptyState";
 import EmptyConversation from "@/components/chat/EmptyConversation";
 import Sidebar from "@/components/chat/Sidebar";
@@ -13,8 +13,6 @@ import ChatMessages from "@/components/chat/ChatMessages";
 import InvitePlannerModal from "@/components/chat/InvitePlannerModal";
 import { useLocationAutocomplete } from "@/hooks/useLocationAutocomplete";
 import GroupProfileModal from "@/components/chat/GroupProfileModal";
-import { buildInviteMessageContent } from "@/lib/invite-utils";
-
 const GROUPS_CACHE_KEY = "cravemate-groups-cache";
 const INVITE_PLANNER_DEFAULT = {
   open: false,
@@ -25,6 +23,55 @@ const INVITE_PLANNER_DEFAULT = {
   error: "",
   isSubmitting: false,
 };
+
+const normalizeInviteRestaurant = (context = {}) => {
+  const business = context.business;
+  const entry = context.entry;
+  const parseCategories = () => {
+    if (Array.isArray(business?.categories)) {
+      return business.categories
+        .map((category) => {
+          if (!category) return "";
+          if (typeof category === "string") return category;
+          return category.title || category.alias || category.name || "";
+        })
+        .filter(Boolean);
+    }
+    if (Array.isArray(entry?.meta?.categories)) return entry.meta.categories;
+    if (entry?.meta?.category) return [entry.meta.category];
+    return [];
+  };
+
+  return {
+    name: business?.name || entry?.businessName || "Restaurant",
+    address: business?.address || entry?.meta?.address || entry?.neighborhood || "",
+    neighborhood: entry?.neighborhood || "",
+    blurb: entry?.blurb || "",
+    image: business?.image_url || entry?.meta?.image || "",
+    url: business?.url || entry?.meta?.url || "",
+    price: business?.price || entry?.meta?.price || "",
+    rating: business?.rating || entry?.meta?.rating || "",
+    reviewCount: business?.review_count || entry?.meta?.reviewCount || "",
+    categories: parseCategories(),
+    entryId: entry?.id || null,
+    leaderboardId: entry?.leaderboardId || null,
+    businessId: business?.id || null,
+    source: context?.source || null,
+  };
+};
+
+const buildInviteMessageContent = (context, schedule) =>
+  JSON.stringify({
+    type: "dining-invite",
+    restaurant: normalizeInviteRestaurant(context),
+    schedule,
+    source: context?.source || "chat",
+    context: {
+      messageId: context?.messageId || null,
+      entryId: context?.entry?.id || null,
+      businessId: context?.business?.id || null,
+    },
+  });
 
 export default function HomePage() {
   const { data: session, status } = useSession();
@@ -405,43 +452,11 @@ export default function HomePage() {
       startTime: invitePlanner.startTime,
       endTime: invitePlanner.endTime,
       timezone,
-      startISO: startDate.toISOString(),
-      endISO: endDate.toISOString(),
     };
 
     setInvitePlanner((prev) => ({ ...prev, isSubmitting: true, error: "" }));
 
-    let calendarEvent = null;
-    try {
-      console.log("[invite] requesting calendar event", {
-        context: invitePlanner.context,
-        schedule,
-      });
-      const calendarResponse = await fetch("/api/calendar/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ context: invitePlanner.context, schedule }),
-      });
-      const calendarPayload = await calendarResponse.json();
-      console.log("[invite] calendar API response", {
-        ok: calendarResponse.ok,
-        status: calendarResponse.status,
-        payload: calendarPayload,
-      });
-      if (!calendarResponse.ok) {
-        throw new Error(calendarPayload?.error || "Failed to create calendar event");
-      }
-      calendarEvent = calendarPayload.event || null;
-    } catch (error) {
-      setInvitePlanner((prev) => ({
-        ...prev,
-        isSubmitting: false,
-        error: error.message || "Unable to create calendar event",
-      }));
-      return;
-    }
-
-    const content = buildInviteMessageContent(invitePlanner.context, schedule, calendarEvent);
+    const content = buildInviteMessageContent(invitePlanner.context, schedule);
 
     try {
       const response = await fetch(`/api/groups/${activeGroupId}/messages`, {
@@ -450,11 +465,6 @@ export default function HomePage() {
         body: JSON.stringify({ content }),
       });
       const payload = await response.json();
-      console.log("[invite] chat message response", {
-        ok: response.ok,
-        status: response.status,
-        payload,
-      });
       if (!response.ok) {
         throw new Error(payload?.error || "Failed to send invite");
       }
@@ -472,6 +482,32 @@ export default function HomePage() {
     }
   };
 
+  useEffect(() => {
+    if (!activeGroup?.pinnedInvite?.schedule?.endTime || !activeGroup?.pinnedInvite?.date)
+      return;
+
+    const endDate = new Date(`${activeGroup.pinnedInvite.schedule.date}T${activeGroup.pinnedInvite.schedule.endTime}`);
+    if (Number.isNaN(endDate.getTime())) return;
+    if (Date.now() > endDate.getTime()) {
+      setGroups((prev) =>
+        prev.map((group) =>
+          group.id === activeGroupId ? { ...group, pinnedInvite: null } : group
+        )
+      );
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setGroups((prev) =>
+        prev.map((group) =>
+          group.id === activeGroupId ? { ...group, pinnedInvite: null } : group
+        )
+      );
+    }, endDate.getTime() - Date.now());
+
+    return () => clearTimeout(timeout);
+  }, [activeGroup?.pinnedInvite, activeGroupId]);
+
   const handleInviteResponse = useCallback(
     async ({ decision, invite }) => {
       if (!activeGroupId || !invite) return;
@@ -482,6 +518,24 @@ export default function HomePage() {
       const content = `${userName} ${decisionLabel} ${restaurantName}${
         scheduleLabel ? ` on ${scheduleLabel}` : ""
       }.`;
+
+      if (decision === "accept") {
+        setGroups((prev) =>
+          prev.map((group) =>
+            group.id === activeGroupId
+              ? {
+                  ...group,
+                  pinnedInvite: {
+                    ...invite,
+                    acceptedBy: userName,
+                    acceptedAt: new Date().toISOString(),
+                  },
+                }
+              : group
+          )
+        );
+      }
+
       try {
         const response = await fetch(`/api/groups/${activeGroupId}/messages`, {
           method: "POST",
@@ -696,6 +750,63 @@ export default function HomePage() {
                 </button>
               </div>
             </div>
+
+            {activeGroup.pinnedInvite && (
+              <div className="mx-4 mt-4 rounded-2xl border border-yelp-red/20 bg-white px-4 py-4 shadow-sm sm:mx-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-yelp-red">
+                      Pinned plan
+                    </p>
+                    {activeGroup.pinnedInvite.acceptedBy && (
+                      <p className="text-[11px] text-gray-400">
+                        Accepted by {activeGroup.pinnedInvite.acceptedBy}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setGroups((prev) =>
+                        prev.map((group) =>
+                          group.id === activeGroupId ? { ...group, pinnedInvite: null } : group
+                        )
+                      )
+                    }
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition hover:bg-gray-200 hover:text-gray-700"
+                    aria-label="Clear pinned plan"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {activeGroup.pinnedInvite.restaurant?.name || "Invite"}
+                    </p>
+                    <p className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                      <MapPin size={12} />
+                      {activeGroup.pinnedInvite.restaurant?.address ||
+                        activeGroup.pinnedInvite.restaurant?.neighborhood ||
+                        "Location pending"}
+                    </p>
+                    <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-neutral-50 px-3 py-1 text-xs font-semibold text-gray-600">
+                      <CalendarDays size={13} />
+                      {formatInviteSchedule(activeGroup.pinnedInvite.schedule)}
+                    </p>
+                  </div>
+                  {activeGroup.pinnedInvite.restaurant?.image && (
+                    <div className="h-20 w-32 overflow-hidden rounded-2xl bg-gray-100">
+                      <img
+                        src={activeGroup.pinnedInvite.restaurant.image}
+                        alt={activeGroup.pinnedInvite.restaurant.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <ChatMessages
               messages={activeMessages}
