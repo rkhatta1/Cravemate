@@ -3,13 +3,11 @@ import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "../../../auth/[...nextauth]/route";
 import { toClientMessage } from "@/lib/message-utils";
+import { formatWithGemini, routeWithGemini, stripYelpMention } from "@/lib/gemini-aggregator";
 
 const YELP_AI_ENDPOINT = "https://api.yelp.com/ai/chat/v2";
 const YELP_API_KEY =
   process.env.YELP_AI_API_KEY || process.env.YELP_API_KEY || process.env.YELP_CLIENT_SECRET;
-const GEMINI_ENDPOINT = process.env.AI_STUDIO_API_KEY
-  ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.AI_STUDIO_API_KEY}`
-  : null;
 
 const getParams = async (context) => {
   if (!context?.params) return {};
@@ -69,6 +67,18 @@ const buildGroupContext = (group) => {
   return lines.join("\n");
 };
 
+const extractPlainMessageText = (message) => {
+  if (!message?.content) return "";
+  if (!message.isYelpResponse) return String(message.content || "").slice(0, 500);
+  try {
+    const parsed = JSON.parse(message.content);
+    if (typeof parsed === "string") return parsed.slice(0, 500);
+    return String(parsed?.text || "").slice(0, 500);
+  } catch {
+    return String(message.content || "").slice(0, 500);
+  }
+};
+
 const collectBusinesses = (payload) => {
   const sources = [
     payload?.output?.businesses,
@@ -111,56 +121,7 @@ const collectBusinesses = (payload) => {
     });
 };
 
-const synthesizeWithGemini = async ({ query, yelpText, businesses, groupContext }) => {
-  if (!GEMINI_ENDPOINT) return yelpText;
-  try {
-    const prompt = [
-      "You are @yelp inside Cravemate, a group dining concierge.",
-      "Given the raw Yelp AI findings and structured business data, craft a concise group-chat reply.",
-      "Address the group collectively, highlight ambience/dietary alignment, and suggest actions (e.g., 'Want me to check availability?').",
-      "Keep it under 4 sentences and reference at most 3 businesses.",
-      "",
-      `User query: ${query}`,
-      `Group context:\n${groupContext}`,
-      `Yelp summary text: ${yelpText || "(empty)"}`,
-      `Business data:\n${JSON.stringify(businesses).slice(0, 4000)}`,
-    ].join("\n");
-
-    const response = await fetch(GEMINI_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-      }),
-    });
-
-    const payload = await response.json();
-    console.log("Gemini response payload:", payload);
-    const generated =
-      payload?.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text || part)
-        .filter(Boolean)
-        .join("\n")
-        ?.trim() || payload?.text;
-    return generated?.trim() || yelpText;
-  } catch (error) {
-    console.error("Gemini synthesis failed:", error);
-    return yelpText;
-  }
-};
-
 export async function POST(request, context) {
-  if (!YELP_API_KEY) {
-    return NextResponse.json(
-      { error: "Yelp AI API key missing from environment" },
-      { status: 500 }
-    );
-  }
-
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -206,6 +167,90 @@ export async function POST(request, context) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
 
+  const isMember = group.members.some((member) => member.userId === session.user.id);
+  if (!isMember) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const recentMessages = await prisma.message.findMany({
+    where: { groupId },
+    orderBy: { sentAt: "desc" },
+    take: 12,
+    include: {
+      sender: {
+        select: { id: true, name: true, username: true },
+      },
+    },
+  });
+
+  const yelpContext = buildGroupContext(group);
+
+  const decision = await routeWithGemini({
+    text: query,
+    context: {
+      groupLocation: group.locationContext || "",
+      userLocation: session.user.location || "",
+      recentMessages: recentMessages
+        .reverse()
+        .map((message) => ({
+          role: message.isYelpResponse ? "assistant" : "user",
+          text: extractPlainMessageText(message),
+        }))
+        .slice(-8),
+    },
+  });
+
+  const confidence = typeof decision?.confidence === "number" ? decision.confidence : 0;
+  const requiresLocation = !group.locationContext;
+  const confidenceTooLow = decision.route === "yelp" && confidence < 0.6;
+
+  if (decision.route !== "yelp" || confidenceTooLow) {
+    const fallbackClarify = requiresLocation
+      ? "What city or ZIP should I search in for this group?"
+      : "What are you craving (cuisine) and any must-haves like price range or “open now”?";
+
+    const assistantText =
+      decision.route === "general"
+        ? decision.reply
+        : decision.route === "clarify"
+        ? decision.question
+        : fallbackClarify;
+
+    const messageData = {
+      text: assistantText,
+      businesses: [],
+      routeDecision: decision,
+    };
+
+    const yelpMessage = await prisma.message.create({
+      data: {
+        content: JSON.stringify(messageData),
+        groupId,
+        isYelpResponse: true,
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({
+      message: toClientMessage(yelpMessage, session.user.id),
+    });
+  }
+
+  if (!YELP_API_KEY) {
+    return NextResponse.json(
+      { error: "Yelp AI API key missing from environment" },
+      { status: 500 }
+    );
+  }
+
   if (!group.locationContext) {
     return NextResponse.json(
       { error: "Set a location for this group before asking @yelp." },
@@ -213,14 +258,17 @@ export async function POST(request, context) {
     );
   }
 
-  const isMember = group.members.some((member) => member.userId === session.user.id);
-  if (!isMember) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const yelpQuery = decision.yelpQuery || stripYelpMention(query);
+  const finalQuery = [
+    yelpQuery,
+    `Location: ${group.locationContext}`,
+    `Group Context:\n${yelpContext}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, 1400);
 
-  const yelpContext = buildGroupContext(group);
-  const finalQuery = `${query}\n\nGroup Context:\n${yelpContext}`.slice(0, 1000);
-
+  const startedAt = Date.now();
   const response = await fetch(YELP_AI_ENDPOINT, {
     method: "POST",
     headers: {
@@ -262,8 +310,8 @@ export async function POST(request, context) {
   const yelpSummaryText = combinedMessageText() || "";
   const businesses = collectBusinesses(payload);
   const synthesizedText =
-    (await synthesizeWithGemini({
-      query,
+    (await formatWithGemini({
+      userText: query,
       yelpText: yelpSummaryText,
       businesses,
       groupContext: yelpContext,
@@ -272,7 +320,13 @@ export async function POST(request, context) {
   const messageData = {
     text: synthesizedText,
     businesses,
-    rawSummary: yelpSummaryText,
+    rawSummary: yelpSummaryText?.slice(0, 5000),
+    routeDecision: decision,
+    tool: {
+      provider: "yelp",
+      query: yelpQuery,
+      latencyMs: Date.now() - startedAt,
+    },
   };
 
   const yelpMessage = await prisma.message.create({
