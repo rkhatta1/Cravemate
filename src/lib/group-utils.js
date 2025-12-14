@@ -62,6 +62,19 @@ export const buildGroupContextPayload = (input = {}) => {
   };
 };
 
+const parseInviteContent = (content) => {
+  if (!content) return null;
+  if (typeof content === "object") {
+    return content?.type === "dining-invite" ? content : null;
+  }
+  try {
+    const parsed = JSON.parse(content);
+    return parsed?.type === "dining-invite" ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
 export const toClientGroup = (group, currentUserId) => {
   const memberDetails = Array.isArray(group.members)
     ? group.members.map((member) => buildMemberContextData(member))
@@ -80,12 +93,34 @@ export const toClientGroup = (group, currentUserId) => {
   const lastPreview = lastMessage ? getMessagePreview(lastMessage) : null;
   const lastSenderName = lastMessage?.sender?.name;
 
+  const acceptance = Array.isArray(group.inviteAcceptances)
+    ? group.inviteAcceptances.find((item) => item?.userId === currentUserId) ||
+      group.inviteAcceptances[0]
+    : null;
+  const acceptedInviteMessageId = acceptance?.inviteMessageId || "";
+  const acceptedInviteMessage =
+    acceptedInviteMessageId && Array.isArray(group.messages)
+      ? group.messages.find((message) => message.id === acceptedInviteMessageId)
+      : null;
+  const pinnedInviteBase = acceptedInviteMessage
+    ? parseInviteContent(acceptedInviteMessage.content)
+    : null;
+  const pinnedInvite = pinnedInviteBase
+    ? {
+        ...pinnedInviteBase,
+        inviteMessageId: acceptedInviteMessageId,
+        acceptedAt: acceptance?.acceptedAt || null,
+      }
+    : null;
+
   return {
     id: group.id,
     name: group.name,
     locationContext: group.locationContext || "",
     memberDetails,
     groupContext: group.groupContext || null,
+    pinnedInvite,
+    acceptedInviteMessageId,
     participants,
     lastMessage: lastPreview && lastSenderName
       ? `${lastSenderName}: ${lastPreview}`

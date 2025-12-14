@@ -1,11 +1,17 @@
 import React, { useEffect, useRef } from "react";
 import MessageBubble from "./MessageBubble";
 
-const ChatMessages = ({ messages, onSendInvite, onRespondToInvite }) => {
+const ChatMessages = ({
+  messages,
+  onSendInvite,
+  onRespondToInvite,
+  acceptedInviteMessageId = "",
+}) => {
   const endRef = useRef(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
+    console.log('activeMessages:', messages);
   }, [messages]);
 
   const safeMessages = Array.isArray(messages) ? messages : [];
@@ -23,6 +29,7 @@ const ChatMessages = ({ messages, onSendInvite, onRespondToInvite }) => {
           }
           onSendInvite={onSendInvite}
           onRespondToInvite={onRespondToInvite}
+          acceptedInviteMessageId={acceptedInviteMessageId}
         />
       ))}
       <div ref={endRef} />

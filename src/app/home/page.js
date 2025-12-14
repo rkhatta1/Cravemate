@@ -5,7 +5,15 @@ import { useSession, signOut } from "next-auth/react";
 import { useSocket } from "@/hooks/useSocket";
 import { useRouter } from "next/navigation";
 import { getMessagePreview } from "@/lib/message-utils";
-import { PlusCircle, Send, MapPin, PanelLeft, Loader2, CalendarDays, X } from "lucide-react";
+import {
+  PlusCircle,
+  Send,
+  MapPin,
+  PanelLeft,
+  Loader2,
+  CalendarDays,
+  X,
+} from "lucide-react";
 import EmptyState from "@/components/chat/EmptyState";
 import EmptyConversation from "@/components/chat/EmptyConversation";
 import Sidebar from "@/components/chat/Sidebar";
@@ -17,9 +25,8 @@ const GROUPS_CACHE_KEY = "cravemate-groups-cache";
 const INVITE_PLANNER_DEFAULT = {
   open: false,
   context: null,
-  date: "",
-  startTime: "",
-  endTime: "",
+  date: null,
+  time: "18:30",
   error: "",
   isSubmitting: false,
 };
@@ -44,7 +51,8 @@ const normalizeInviteRestaurant = (context = {}) => {
 
   return {
     name: business?.name || entry?.businessName || "Restaurant",
-    address: business?.address || entry?.meta?.address || entry?.neighborhood || "",
+    address:
+      business?.address || entry?.meta?.address || entry?.neighborhood || "",
     neighborhood: entry?.neighborhood || "",
     blurb: entry?.blurb || "",
     image: business?.image_url || entry?.meta?.image || "",
@@ -85,27 +93,30 @@ export default function HomePage() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const groupsLoadedRef = useRef(false);
 
-  const appendMessage = useCallback((groupsList, groupId, message, overrides = {}) => {
-    const senderName =
-      message.sender?.name || (message.isYelpResponse ? "@yelp" : "Someone");
-    const preview = getMessagePreview(message);
-    let groupFound = false;
-    const updated = groupsList.map((group) => {
-      if (group.id !== groupId) return group;
-      groupFound = true;
-      const exists = (group.messages || []).some((m) => m.id === message.id);
-      if (exists) return group;
-      const messages = [...(group.messages || []), message];
-      return {
-        ...group,
-        ...overrides,
-        messages,
-        lastMessage: `${senderName}: ${preview}`,
-        updatedAt: message.sentAt,
-      };
-    });
-    return groupFound ? updated : groupsList;
-  }, []);
+  const appendMessage = useCallback(
+    (groupsList, groupId, message, overrides = {}) => {
+      const senderName =
+        message.sender?.name || (message.isYelpResponse ? "@yelp" : "Someone");
+      const preview = getMessagePreview(message);
+      let groupFound = false;
+      const updated = groupsList.map((group) => {
+        if (group.id !== groupId) return group;
+        groupFound = true;
+        const exists = (group.messages || []).some((m) => m.id === message.id);
+        if (exists) return group;
+        const messages = [...(group.messages || []), message];
+        return {
+          ...group,
+          ...overrides,
+          messages,
+          lastMessage: `${senderName}: ${preview}`,
+          updatedAt: message.sentAt,
+        };
+      });
+      return groupFound ? updated : groupsList;
+    },
+    []
+  );
 
   const handleIncomingMessage = useCallback(
     (payload) => {
@@ -157,7 +168,9 @@ export default function HomePage() {
         setIsLoadingGroups(false);
         return;
       }
-      setIsLoadingGroups((prev) => (!groups.length || needsRefresh ? true : prev));
+      setIsLoadingGroups((prev) =>
+        !groups.length || needsRefresh ? true : prev
+      );
       setLoadError("");
       try {
         const response = await fetch("/api/groups");
@@ -170,7 +183,10 @@ export default function HomePage() {
           setActiveGroupId(payload.groups?.[0]?.id || "");
           groupsLoadedRef.current = true;
           try {
-            localStorage.setItem(GROUPS_CACHE_KEY, JSON.stringify(payload.groups || []));
+            localStorage.setItem(
+              GROUPS_CACHE_KEY,
+              JSON.stringify(payload.groups || [])
+            );
           } catch (err) {
             console.warn("Failed to cache groups", err);
           }
@@ -241,7 +257,9 @@ export default function HomePage() {
     isSubmitting: false,
     context: null,
   });
-  const [invitePlanner, setInvitePlanner] = useState(() => ({ ...INVITE_PLANNER_DEFAULT }));
+  const [invitePlanner, setInvitePlanner] = useState(() => ({
+    ...INVITE_PLANNER_DEFAULT,
+  }));
   const [locationModal, setLocationModal] = useState({
     open: false,
     location: "",
@@ -256,20 +274,30 @@ export default function HomePage() {
     suggestions: createLocationSuggestions,
     loading: createLocationLoading,
     clearSuggestions: clearCreateLocationSuggestions,
-  } = useLocationAutocomplete(newGroupModal.location, { active: createLocationFocused });
+  } = useLocationAutocomplete(newGroupModal.location, {
+    active: createLocationFocused,
+  });
   const {
     suggestions: editLocationSuggestions,
     loading: editLocationLoading,
     clearSuggestions: clearEditLocationSuggestions,
-  } = useLocationAutocomplete(locationModal.location, { active: editLocationFocused });
+  } = useLocationAutocomplete(locationModal.location, {
+    active: editLocationFocused,
+  });
 
   useEffect(() => {
     const handleClick = (event) => {
-      if (createLocationRef.current && !createLocationRef.current.contains(event.target)) {
+      if (
+        createLocationRef.current &&
+        !createLocationRef.current.contains(event.target)
+      ) {
         clearCreateLocationSuggestions();
         setCreateLocationFocused(false);
       }
-      if (editLocationRef.current && !editLocationRef.current.contains(event.target)) {
+      if (
+        editLocationRef.current &&
+        !editLocationRef.current.contains(event.target)
+      ) {
         clearEditLocationSuggestions();
         setEditLocationFocused(false);
       }
@@ -281,8 +309,12 @@ export default function HomePage() {
   useEffect(() => {
     const defaultLocation = session?.user?.location;
     if (!defaultLocation) return;
-    setNewGroupModal((prev) => (prev.location ? prev : { ...prev, location: defaultLocation }));
-    setLocationModal((prev) => (prev.location ? prev : { ...prev, location: defaultLocation }));
+    setNewGroupModal((prev) =>
+      prev.location ? prev : { ...prev, location: defaultLocation }
+    );
+    setLocationModal((prev) =>
+      prev.location ? prev : { ...prev, location: defaultLocation }
+    );
   }, [session]);
 
   const openCreateModal = () =>
@@ -386,9 +418,8 @@ export default function HomePage() {
       setInvitePlanner({
         open: true,
         context: inviteContext || null,
-        date: "",
-        startTime: "",
-        endTime: "",
+        date: null,
+        time: "18:30",
         error: "",
         isSubmitting: false,
       });
@@ -396,7 +427,8 @@ export default function HomePage() {
     [activeGroupId]
   );
 
-  const closeInvitePlanner = () => setInvitePlanner({ ...INVITE_PLANNER_DEFAULT });
+  const closeInvitePlanner = () =>
+    setInvitePlanner({ ...INVITE_PLANNER_DEFAULT });
 
   const handleInvitePlannerFieldChange = (field, value) => {
     setInvitePlanner((prev) => ({
@@ -414,10 +446,13 @@ export default function HomePage() {
       }));
       return;
     }
-    if (!invitePlanner.date || !invitePlanner.startTime || !invitePlanner.endTime) {
+    if (
+      !invitePlanner.date ||
+      !invitePlanner.time
+    ) {
       setInvitePlanner((prev) => ({
         ...prev,
-        error: "Pick a date plus start/end times.",
+        error: "Pick a date and time.",
       }));
       return;
     }
@@ -429,28 +464,38 @@ export default function HomePage() {
       return;
     }
 
-    const startDate = new Date(`${invitePlanner.date}T${invitePlanner.startTime}`);
-    const endDate = new Date(`${invitePlanner.date}T${invitePlanner.endTime}`);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    const baseDate = invitePlanner.date instanceof Date ? invitePlanner.date : null;
+    if (!baseDate) {
       setInvitePlanner((prev) => ({
         ...prev,
-        error: "Provide valid start and end times.",
+        error: "Provide a valid date.",
       }));
       return;
     }
-    if (endDate <= startDate) {
+    const [hoursRaw, minutesRaw] = String(invitePlanner.time || "").split(":");
+    const hours = Number(hoursRaw);
+    const minutes = Number(minutesRaw);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
       setInvitePlanner((prev) => ({
         ...prev,
-        error: "End time must be after start time.",
+        error: "Provide a valid time.",
+      }));
+      return;
+    }
+
+    const dateTime = new Date(baseDate);
+    dateTime.setHours(hours, minutes, 0, 0);
+    if (Number.isNaN(dateTime.getTime())) {
+      setInvitePlanner((prev) => ({
+        ...prev,
+        error: "Provide a valid date and time.",
       }));
       return;
     }
 
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     const schedule = {
-      date: invitePlanner.date,
-      startTime: invitePlanner.startTime,
-      endTime: invitePlanner.endTime,
+      datetime: dateTime.toISOString(),
       timezone,
     };
 
@@ -483,24 +528,39 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    if (!activeGroup?.pinnedInvite?.schedule?.endTime || !activeGroup?.pinnedInvite?.date)
+    if (
+      !activeGroup?.pinnedInvite?.schedule
+    )
       return;
 
-    const endDate = new Date(`${activeGroup.pinnedInvite.schedule.date}T${activeGroup.pinnedInvite.schedule.endTime}`);
-    if (Number.isNaN(endDate.getTime())) return;
+    const schedule = activeGroup.pinnedInvite.schedule || {};
+    const endDate = schedule.datetime
+      ? new Date(schedule.datetime)
+      : schedule.date && schedule.endTime
+      ? new Date(`${schedule.date}T${schedule.endTime}`)
+      : null;
+    if (!endDate || Number.isNaN(endDate.getTime())) return;
     if (Date.now() > endDate.getTime()) {
+      const groupId = activeGroupId;
+      fetch(`/api/groups/${groupId}/invite-acceptance`, { method: "DELETE" }).catch(() => {});
       setGroups((prev) =>
         prev.map((group) =>
-          group.id === activeGroupId ? { ...group, pinnedInvite: null } : group
+          group.id === groupId
+            ? { ...group, pinnedInvite: null, acceptedInviteMessageId: "" }
+            : group
         )
       );
       return;
     }
 
     const timeout = setTimeout(() => {
+      const groupId = activeGroupId;
+      fetch(`/api/groups/${groupId}/invite-acceptance`, { method: "DELETE" }).catch(() => {});
       setGroups((prev) =>
         prev.map((group) =>
-          group.id === activeGroupId ? { ...group, pinnedInvite: null } : group
+          group.id === groupId
+            ? { ...group, pinnedInvite: null, acceptedInviteMessageId: "" }
+            : group
         )
       );
     }, endDate.getTime() - Date.now());
@@ -509,50 +569,54 @@ export default function HomePage() {
   }, [activeGroup?.pinnedInvite, activeGroupId]);
 
   const handleInviteResponse = useCallback(
-    async ({ decision, invite }) => {
+    async ({ decision, invite, messageId }) => {
       if (!activeGroupId || !invite) return;
-      const restaurantName = invite?.restaurant?.name || "this plan";
-      const scheduleLabel = formatInviteSchedule(invite?.schedule);
-      const decisionLabel = decision === "accept" ? "is in for" : "can't make";
-      const userName = session?.user?.name || "Someone";
-      const content = `${userName} ${decisionLabel} ${restaurantName}${
-        scheduleLabel ? ` on ${scheduleLabel}` : ""
-      }.`;
+      if (decision !== "accept") return;
 
-      if (decision === "accept") {
-        setGroups((prev) =>
-          prev.map((group) =>
-            group.id === activeGroupId
-              ? {
-                  ...group,
-                  pinnedInvite: {
-                    ...invite,
-                    acceptedBy: userName,
-                    acceptedAt: new Date().toISOString(),
-                  },
-                }
-              : group
-          )
-        );
+      const inviteMessageId = messageId || null;
+      if (!inviteMessageId) {
+        if (typeof window !== "undefined") {
+          window.alert("This invite is missing a message reference.");
+        }
+        return;
       }
 
       try {
-        const response = await fetch(`/api/groups/${activeGroupId}/messages`, {
+        const response = await fetch(`/api/groups/${activeGroupId}/invite-acceptance`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ inviteMessageId }),
         });
         const payload = await response.json();
         if (!response.ok) {
-          throw new Error(payload?.error || "Failed to send response");
+          throw new Error(payload?.error || "Failed to accept invite");
         }
-        const message = payload.message;
-        setGroups((prev) => appendMessage(prev, activeGroupId, message));
-        socketRef.current?.emit("chat:send", message);
+
+        if (payload?.pinnedInvite) {
+          setGroups((prev) =>
+            prev.map((group) =>
+              group.id === activeGroupId
+                ? {
+                    ...group,
+                    pinnedInvite: payload.pinnedInvite,
+                    acceptedInviteMessageId: payload.inviteMessageId || inviteMessageId,
+                  }
+                : group
+            )
+          );
+        }
+
+        if (payload?.message) {
+          const message = payload.message;
+          setGroups((prev) => appendMessage(prev, activeGroupId, message));
+          socketRef.current?.emit("chat:send", message);
+        }
       } catch (error) {
         console.error("Invite response error:", error);
         if (typeof window !== "undefined") {
-          window.alert(error.message || "Unable to respond to invite right now.");
+          window.alert(
+            error.message || "Unable to respond to invite right now."
+          );
         }
       }
     },
@@ -577,7 +641,9 @@ export default function HomePage() {
         throw new Error(payload?.error || "Unable to add member");
       }
       setGroups((prev) =>
-        prev.map((group) => (group.id === payload.group.id ? payload.group : group))
+        prev.map((group) =>
+          group.id === payload.group.id ? payload.group : group
+        )
       );
       closeInviteModal();
     } catch (error) {
@@ -626,7 +692,9 @@ export default function HomePage() {
         throw new Error(payload?.error || "Unable to update location");
       }
       setGroups((prev) =>
-        prev.map((group) => (group.id === payload.group.id ? payload.group : group))
+        prev.map((group) =>
+          group.id === payload.group.id ? payload.group : group
+        )
       );
       setActiveGroupId(payload.group.id);
       closeLocationModal();
@@ -648,19 +716,39 @@ export default function HomePage() {
   };
 
   const formatInviteSchedule = (schedule) => {
-    if (!schedule?.date) return "";
+    if (!schedule) return "";
+    const timezoneLabel = schedule.timezone ? ` (${schedule.timezone})` : "";
+
+    if (schedule.datetime) {
+      try {
+        const dateLabel = new Date(schedule.datetime).toLocaleString(undefined, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        return `${dateLabel}${timezoneLabel}`;
+      } catch {
+        return `${schedule.datetime}${timezoneLabel}`;
+      }
+    }
+
+    if (!schedule.date) return "";
     const start = schedule.startTime || "--";
     const end = schedule.endTime || "--";
     try {
-      const dateLabel = new Date(`${schedule.date}T00:00:00`).toLocaleDateString(undefined, {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-      });
-      const timezoneLabel = schedule.timezone ? ` (${schedule.timezone})` : "";
+      const dateLabel = new Date(`${schedule.date}T00:00:00`).toLocaleDateString(
+        undefined,
+        {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        }
+      );
       return `${dateLabel} · ${start} - ${end}${timezoneLabel}`;
     } catch {
-      return `${schedule.date} · ${start} - ${end}`;
+      return `${schedule.date} · ${start} - ${end}${timezoneLabel}`;
     }
   };
 
@@ -676,7 +764,9 @@ export default function HomePage() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         currentView="chat"
-        onNavigate={(view) => router.push(view === "leaderboard" ? "/leaderboard" : "/home")}
+        onNavigate={(view) =>
+          router.push(view === "leaderboard" ? "/leaderboard" : "/home")
+        }
       />
 
       <main className="relative flex flex-1 flex-col bg-neutral-50">
@@ -713,15 +803,17 @@ export default function HomePage() {
                       <span className="text-gray-400">#</span>
                       {activeGroup.name}
                     </span>
-                    {activeGroup.locationContext && (
+                    {/* {activeGroup.locationContext && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-yelp-red/10 px-2 py-1 text-[11px] font-semibold text-yelp-red">
                         <MapPin size={12} />
                         {activeGroup.locationContext}
                       </span>
-                    )}
+                    )} */}
                   </button>
                   <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <span>{activeParticipants.length} members · includes @yelp</span>
+                    <span>
+                      {activeParticipants.length} members · includes @yelp
+                    </span>
                     {!activeGroup.locationContext && (
                       <button
                         type="button"
@@ -742,17 +834,29 @@ export default function HomePage() {
                 >
                   Add friends
                 </button>
+                {activeGroup.locationContext ? (
+
                 <button
                   onClick={openLocationModal}
-                  className="rounded-full bg-black px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800"
+                  className="rounded-full inline-flex items-center gap-2 bg-yelp-red/10 text-yelp-red px-3 py-2 text-xs font-semibold hover:bg-yelp-red/20"
                 >
-                  Location
+                  <MapPin size={12} />
+                  {activeGroup.locationContext}
                 </button>
+                ) : (
+                <button
+                  onClick={openLocationModal}
+                  className="rounded-full bg-black text-white px-3 py-2 text-xs font-semibold hover:bg-gray-800"
+                >
+                  <MapPin size={12} />
+                  {activeGroup.locationContext}
+                </button>
+                )}
               </div>
             </div>
 
             {activeGroup.pinnedInvite && (
-              <div className="mx-4 mt-4 rounded-2xl border border-yelp-red/20 bg-white px-4 py-4 shadow-sm sm:mx-6">
+              <div className="border border-t-0 border-b-yelp-red/20 border-x-0 bg-white px-4 py-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-yelp-red">
@@ -766,13 +870,27 @@ export default function HomePage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() =>
-                      setGroups((prev) =>
-                        prev.map((group) =>
-                          group.id === activeGroupId ? { ...group, pinnedInvite: null } : group
-                        )
-                      )
-                    }
+                    onClick={async () => {
+                      try {
+                        await fetch(`/api/groups/${activeGroupId}/invite-acceptance`, {
+                          method: "DELETE",
+                        });
+                      } catch (error) {
+                        console.warn("Failed to opt out of invite", error);
+                      } finally {
+                        setGroups((prev) =>
+                          prev.map((group) =>
+                            group.id === activeGroupId
+                              ? {
+                                  ...group,
+                                  pinnedInvite: null,
+                                  acceptedInviteMessageId: "",
+                                }
+                              : group
+                          )
+                        );
+                      }
+                    }}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition hover:bg-gray-200 hover:text-gray-700"
                     aria-label="Clear pinned plan"
                   >
@@ -812,6 +930,7 @@ export default function HomePage() {
               messages={activeMessages}
               onSendInvite={handleSendInviteIntent}
               onRespondToInvite={handleInviteResponse}
+              acceptedInviteMessageId={activeGroup.acceptedInviteMessageId}
             />
 
             <form
@@ -822,19 +941,26 @@ export default function HomePage() {
 
                 const sendMessage = async () => {
                   try {
-                    const response = await fetch(`/api/groups/${activeGroup.id}/messages`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ content: messageInput.trim() }),
-                    });
+                    const response = await fetch(
+                      `/api/groups/${activeGroup.id}/messages`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ content: messageInput.trim() }),
+                      }
+                    );
                     const payload = await response.json();
                     if (!response.ok) {
-                      throw new Error(payload?.error || "Failed to send message");
+                      throw new Error(
+                        payload?.error || "Failed to send message"
+                      );
                     }
 
                     const message = payload.message;
 
-                    setGroups((prev) => appendMessage(prev, activeGroup.id, message));
+                    setGroups((prev) =>
+                      appendMessage(prev, activeGroup.id, message)
+                    );
 
                     socketRef.current?.emit("chat:send", message);
 
@@ -854,12 +980,12 @@ export default function HomePage() {
               }}
             >
               <div className="mx-auto flex max-w-4xl items-end gap-2 rounded-xl border border-gray-200 bg-neutral-50 px-2 py-2 shadow-sm transition-all focus-within:border-neutral-300 focus-within:ring-2 focus-within:ring-neutral-100">
-                <button
+                {/* <button
                   type="button"
                   className="shrink-0 rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
                 >
                   <PlusCircle size={20} />
-                </button>
+                </button> */}
                 <input
                   type="text"
                   placeholder='Message... tip: prefix with "@yelp" to ask for help'
@@ -882,7 +1008,10 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="mt-2 text-center text-[10px] text-gray-400">
-                Tip: type <span className="rounded bg-yelp-red/10 px-1 font-mono text-yelp-red">@yelp</span>{" "}
+                Tip: type{" "}
+                <span className="rounded bg-yelp-red/10 px-1 font-mono text-yelp-red">
+                  @yelp
+                </span>{" "}
                 to pull Yelp AI into the chat
               </p>
             </form>
@@ -901,9 +1030,12 @@ export default function HomePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="space-y-1">
-              <h3 className="text-xl font-semibold text-gray-900">Start a group chat</h3>
+              <h3 className="text-xl font-semibold text-gray-900">
+                Start a group chat
+              </h3>
               <p className="text-sm text-gray-500">
-                Give your chat a name and define where @yelp should look for recommendations.
+                Give your chat a name and define where @yelp should look for
+                recommendations.
               </p>
             </div>
 
@@ -918,7 +1050,10 @@ export default function HomePage() {
                   placeholder="e.g. Sunday brunch crew"
                   value={newGroupModal.name}
                   onChange={(e) =>
-                    setNewGroupModal((prev) => ({ ...prev, name: e.target.value }))
+                    setNewGroupModal((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
                   }
                 />
               </div>
@@ -935,7 +1070,10 @@ export default function HomePage() {
                     value={newGroupModal.location}
                     onFocus={() => setCreateLocationFocused(true)}
                     onChange={(e) =>
-                      setNewGroupModal((prev) => ({ ...prev, location: e.target.value }))
+                      setNewGroupModal((prev) => ({
+                        ...prev,
+                        location: e.target.value,
+                      }))
                     }
                   />
                   {createLocationLoading && (
@@ -960,9 +1098,12 @@ export default function HomePage() {
                           <span className="text-sm font-semibold text-gray-900">
                             {suggestion.name}
                           </span>
-                          {suggestion.full && suggestion.full !== suggestion.name && (
-                            <span className="text-xs text-gray-500">{suggestion.full}</span>
-                          )}
+                          {suggestion.full &&
+                            suggestion.full !== suggestion.name && (
+                              <span className="text-xs text-gray-500">
+                                {suggestion.full}
+                              </span>
+                            )}
                         </button>
                       ))}
                     </div>
@@ -1006,8 +1147,7 @@ export default function HomePage() {
         open={invitePlanner.open}
         context={invitePlanner.context}
         date={invitePlanner.date}
-        startTime={invitePlanner.startTime}
-        endTime={invitePlanner.endTime}
+        time={invitePlanner.time}
         error={invitePlanner.error}
         onFieldChange={handleInvitePlannerFieldChange}
         onSubmit={handleInvitePlannerSubmit}
@@ -1019,13 +1159,16 @@ export default function HomePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="space-y-1">
-              <h3 className="text-xl font-semibold text-gray-900">Add someone to this chat</h3>
+              <h3 className="text-xl font-semibold text-gray-900">
+                Add someone to this chat
+              </h3>
               <p className="text-sm text-gray-500">
-                Enter the email tied to their Cravemate account to drop them into the conversation.
+                Enter the email tied to their Cravemate account to drop them
+                into the conversation.
               </p>
             </div>
 
-            {inviteModal.context && (
+            {/* {inviteModal.context && (
               <div className="mt-5 rounded-2xl border border-gray-100 bg-neutral-50 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                   Invite context
@@ -1046,7 +1189,7 @@ export default function HomePage() {
                   </p>
                 )}
               </div>
-            )}
+            )} */}
 
             <div className="mt-5 space-y-4">
               <div>
@@ -1059,7 +1202,10 @@ export default function HomePage() {
                   placeholder="teammate@email.com"
                   value={inviteModal.email}
                   onChange={(e) =>
-                    setInviteModal((prev) => ({ ...prev, email: e.target.value }))
+                    setInviteModal((prev) => ({
+                      ...prev,
+                      email: e.target.value,
+                    }))
                   }
                 />
               </div>
@@ -1093,9 +1239,12 @@ export default function HomePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="space-y-1">
-              <h3 className="text-xl font-semibold text-gray-900">Update group location</h3>
+              <h3 className="text-xl font-semibold text-gray-900">
+                Update group location
+              </h3>
               <p className="text-sm text-gray-500">
-                Set the city or ZIP that @yelp should use when searching for this group.
+                Set the city or ZIP that @yelp should use when searching for
+                this group.
               </p>
             </div>
 
@@ -1112,7 +1261,10 @@ export default function HomePage() {
                     value={locationModal.location}
                     onFocus={() => setEditLocationFocused(true)}
                     onChange={(e) =>
-                      setLocationModal((prev) => ({ ...prev, location: e.target.value }))
+                      setLocationModal((prev) => ({
+                        ...prev,
+                        location: e.target.value,
+                      }))
                     }
                   />
                   {editLocationLoading && (
@@ -1137,9 +1289,12 @@ export default function HomePage() {
                           <span className="text-sm font-semibold text-gray-900">
                             {suggestion.name}
                           </span>
-                          {suggestion.full && suggestion.full !== suggestion.name && (
-                            <span className="text-xs text-gray-500">{suggestion.full}</span>
-                          )}
+                          {suggestion.full &&
+                            suggestion.full !== suggestion.name && (
+                              <span className="text-xs text-gray-500">
+                                {suggestion.full}
+                              </span>
+                            )}
                         </button>
                       ))}
                     </div>
@@ -1162,7 +1317,9 @@ export default function HomePage() {
               </button>
               <button
                 onClick={handleLocationSave}
-                disabled={locationModal.isSubmitting || !locationModal.location.trim()}
+                disabled={
+                  locationModal.isSubmitting || !locationModal.location.trim()
+                }
                 className="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {locationModal.isSubmitting ? "Saving..." : "Save"}

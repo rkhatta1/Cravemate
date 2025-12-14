@@ -15,7 +15,7 @@ const memberSelect = {
   vibeReport: true,
 };
 
-const groupInclude = {
+const buildGroupInclude = (currentUserId) => ({
   members: {
     include: {
       user: {
@@ -23,6 +23,11 @@ const groupInclude = {
       },
     },
   },
+  inviteAcceptances: currentUserId
+    ? {
+        where: { userId: currentUserId },
+      }
+    : true,
   messages: {
     orderBy: { sentAt: "asc" },
     include: {
@@ -36,7 +41,7 @@ const groupInclude = {
       sharedEntry: true,
     },
   },
-};
+});
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -52,7 +57,7 @@ export async function GET() {
         },
       },
     },
-    include: groupInclude,
+    include: buildGroupInclude(session.user.id),
     orderBy: {
       createdAt: "desc",
     },
@@ -110,7 +115,7 @@ export async function POST(request) {
         ],
       },
     },
-    include: groupInclude,
+    include: buildGroupInclude(session.user.id),
   });
 
   const context = buildGroupContextPayload({
@@ -121,7 +126,7 @@ export async function POST(request) {
   const hydratedGroup = await prisma.group.update({
     where: { id: group.id },
     data: { groupContext: context },
-    include: groupInclude,
+    include: buildGroupInclude(session.user.id),
   });
 
   return NextResponse.json({

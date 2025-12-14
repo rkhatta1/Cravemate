@@ -79,6 +79,17 @@ const extractPlainMessageText = (message) => {
   }
 };
 
+const extractYelpChatId = (payload) => {
+  const candidates = [
+    payload?.chat_id,
+    payload?.chatId,
+    payload?.output?.chat_id,
+    payload?.output?.chatId,
+    payload?.output?.conversation_id,
+  ];
+  return candidates.find((value) => typeof value === "string" && value.trim()) || "";
+};
+
 const collectBusinesses = (payload) => {
   const sources = [
     payload?.output?.businesses,
@@ -116,7 +127,7 @@ const collectBusinesses = (payload) => {
           "",
         url: biz.url,
         categories,
-        image: biz.photos?.[0] || biz.image_url,
+        image: biz.photos?.[0] || biz.image_url || biz.contextual_info.photos?.[0].original_url,
       };
     });
 };
@@ -277,6 +288,7 @@ export async function POST(request, context) {
     },
     body: JSON.stringify({
       query: finalQuery,
+      ...(group.yelpChatId ? { chat_id: group.yelpChatId } : {}),
     }),
   });
 
@@ -285,12 +297,25 @@ export async function POST(request, context) {
     const message = payload?.error?.message || payload?.error_description || "Failed to reach Yelp AI";
     return NextResponse.json({ error: message }, { status: response.status });
   }
-  console.log("Yelp AI response payload:", payload);
+  console.log("Yelp AI response payload:", JSON.stringify(payload));
+
+  const receivedChatId = extractYelpChatId(payload);
+  if (receivedChatId && !group.yelpChatId) {
+    try {
+      await prisma.group.update({
+        where: { id: groupId },
+        data: { yelpChatId: receivedChatId },
+      });
+    } catch (error) {
+      console.warn("Failed to store Yelp chat_id for group", error);
+    }
+  }
 
   const combinedMessageText = () => {
     const candidates = [
       payload?.output?.text,
       payload?.text,
+      payload?.response?.text,
       payload?.output?.response?.text,
       Array.isArray(payload?.output?.messages)
         ? payload.output.messages
@@ -325,6 +350,7 @@ export async function POST(request, context) {
     tool: {
       provider: "yelp",
       query: yelpQuery,
+      chatId: group.yelpChatId || receivedChatId || "",
       latencyMs: Date.now() - startedAt,
     },
   };

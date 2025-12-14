@@ -15,6 +15,30 @@ const memberSelect = {
   vibeReport: true,
 };
 
+const buildGroupInclude = (currentUserId) => ({
+  members: {
+    include: {
+      user: {
+        select: memberSelect,
+      },
+    },
+  },
+  inviteAcceptances: currentUserId
+    ? {
+        where: { userId: currentUserId },
+      }
+    : true,
+  messages: {
+    orderBy: { sentAt: "asc" },
+    include: {
+      sender: {
+        select: { id: true, name: true, username: true },
+      },
+      sharedEntry: true,
+    },
+  },
+});
+
 const getParams = async (context) => {
   if (!context?.params) return {};
   return (typeof context.params.then === "function"
@@ -84,24 +108,7 @@ export async function POST(request, context) {
 
   const groupWithMembers = await prisma.group.findUnique({
     where: { id: groupId },
-    include: {
-      members: {
-        include: {
-          user: {
-            select: memberSelect,
-          },
-        },
-      },
-      messages: {
-        orderBy: { sentAt: "asc" },
-        include: {
-          sender: {
-            select: { id: true, name: true, username: true },
-          },
-          sharedEntry: true,
-        },
-      },
-    },
+    include: buildGroupInclude(session.user.id),
   });
 
   const contextForGroup = buildGroupContextPayload(groupWithMembers);
@@ -109,24 +116,7 @@ export async function POST(request, context) {
   const updatedGroup = await prisma.group.update({
     where: { id: groupId },
     data: { groupContext: contextForGroup },
-    include: {
-      members: {
-        include: {
-          user: {
-            select: memberSelect,
-          },
-        },
-      },
-      messages: {
-        orderBy: { sentAt: "asc" },
-        include: {
-          sender: {
-            select: { id: true, name: true, username: true },
-          },
-          sharedEntry: true,
-        },
-      },
-    },
+    include: buildGroupInclude(session.user.id),
   });
 
   return NextResponse.json({

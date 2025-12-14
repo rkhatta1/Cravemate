@@ -13,7 +13,10 @@ const AvatarPlaceholder = ({ children }) => (
 const formatTimeLabel = (isoString) => {
   if (!isoString) return "";
   try {
-    return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return new Date(isoString).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return "";
   }
@@ -33,23 +36,49 @@ const parseInviteContent = (content) => {
 };
 
 const formatInviteScheduleLabel = (schedule) => {
-  if (!schedule?.date) return "";
+  if (!schedule) return "";
+  const tz = schedule.timezone ? ` (${schedule.timezone})` : "";
+
+  if (schedule.datetime) {
+    try {
+      const label = new Date(schedule.datetime).toLocaleString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      return `${label}${tz}`;
+    } catch {
+      return `${schedule.datetime}${tz}`;
+    }
+  }
+
+  if (!schedule.date) return "";
   const start = schedule.startTime || "--";
   const end = schedule.endTime || "--";
   try {
-    const dateLabel = new Date(`${schedule.date}T00:00:00`).toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-    const tz = schedule.timezone ? ` (${schedule.timezone})` : "";
+    const dateLabel = new Date(`${schedule.date}T00:00:00`).toLocaleDateString(
+      undefined,
+      {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      }
+    );
     return `${dateLabel} · ${start} - ${end}${tz}`;
   } catch {
-    return `${schedule.date} · ${start} - ${end}`;
+    return `${schedule.date} · ${start} - ${end}${tz}`;
   }
 };
 
-const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite }) => {
+const MessageBubble = ({
+  message,
+  isSequence,
+  onSendInvite,
+  onRespondToInvite,
+  acceptedInviteMessageId = "",
+}) => {
   if (!message) return null;
 
   const isSelf = Boolean(message.sender?.isSelf);
@@ -97,7 +126,9 @@ const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite })
             </span>
             Yelp AI
           </div>
-          <p className="mt-2 whitespace-pre-line text-neutral-800">{payload?.text}</p>
+          <p className="mt-2 whitespace-pre-line text-neutral-800">
+            {payload?.text}
+          </p>
           {payload?.businesses?.length > 0 && (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {payload.businesses.slice(0, 3).map((biz) => (
@@ -114,7 +145,9 @@ const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite })
               ))}
             </div>
           )}
-          <p className="mt-2 text-[10px] text-neutral-500">@yelp · {timeLabel}</p>
+          <p className="mt-2 text-[10px] text-neutral-500">
+            @yelp · {timeLabel}
+          </p>
         </div>
       </div>
     );
@@ -126,12 +159,16 @@ const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite })
     const categoriesLabel = Array.isArray(restaurant.categories)
       ? restaurant.categories.join(" • ")
       : "";
+    const alreadyAcceptedThis = acceptedInviteMessageId === message.id;
+    const blockedByOther = Boolean(
+      acceptedInviteMessageId && acceptedInviteMessageId !== message.id
+    );
 
     return (
       <div
-        className={`group flex gap-3 ${isSelf ? "justify-end" : "justify-start"} ${
-          isSequence ? "mt-1" : "mt-4"
-        }`}
+        className={`group flex gap-3 ${
+          isSelf ? "justify-end" : "justify-start"
+        } ${isSequence ? "mt-1" : "mt-4"}`}
       >
         <div className={showAvatar ? "" : "w-10"}>
           {showAvatar && <AvatarPlaceholder>{avatarContent}</AvatarPlaceholder>}
@@ -144,7 +181,9 @@ const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite })
           )}
           <div className="mt-2 flex items-center justify-between gap-3">
             <div>
-              <p className="text-lg font-semibold text-gray-900">{restaurant.name || "Invite"}</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {restaurant.name || "Invite"}
+              </p>
               {restaurant.address && (
                 <p className="mt-1 flex items-center gap-1 text-xs text-gray-500">
                   <MapPin size={12} />
@@ -166,45 +205,51 @@ const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite })
               </div>
             )}
           </div>
-          {scheduleLabel && (
-            <p className="mt-3 inline-flex items-center gap-1 rounded-xl bg-neutral-50 px-3 py-1 text-xs font-semibold text-gray-600">
-              <CalendarDays size={14} />
-              {scheduleLabel}
-            </p>
-          )}
-          {restaurant.blurb && (
-            <p className="mt-3 text-sm text-neutral-600">{restaurant.blurb}</p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {restaurant.url && (
-              <a
-                href={restaurant.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
-              >
-                View details
-              </a>
+          <div className="flex mt-3 items-center justify-between">
+            {scheduleLabel && (
+              <p className="inline-flex items-center gap-1 rounded-xl bg-neutral-50 px-3 py-1 text-xs font-semibold text-gray-600">
+                <CalendarDays size={14} />
+                {scheduleLabel}
+              </p>
+            )}
+
+            {restaurant.blurb && (
+              <p className="text-sm text-neutral-600">{restaurant.blurb}</p>
             )}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => emitInviteResponse("accept")}
-              disabled={isSelf || typeof onRespondToInvite !== "function"}
-              className="rounded-2xl bg-yelp-red px-4 py-2 text-xs font-semibold text-white shadow hover:bg-yelp-dark disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Accept
-            </button>
-            <button
-              type="button"
-              onClick={() => emitInviteResponse("reject")}
-              disabled={isSelf || typeof onRespondToInvite !== "function"}
-              className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700 transition hover:border-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Reject
-            </button>
+          <div className="mt-3 flex items-center">
+            <div className="gap-2 flex flex-wrap">
+              <button
+                type="button"
+                onClick={() => emitInviteResponse("accept")}
+                disabled={
+                  isSelf ||
+                  typeof onRespondToInvite !== "function" ||
+                  blockedByOther ||
+                  alreadyAcceptedThis
+                }
+                className="rounded-2xl bg-yelp-red px-4 py-2 text-xs font-semibold text-white shadow hover:bg-yelp-dark disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {alreadyAcceptedThis
+                  ? "Accepted"
+                  : blockedByOther
+                  ? "Plan picked"
+                  : "Accept"}
+              </button>
+              {restaurant.url && (
+                <a
+                  href={restaurant.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-yelp-red"
+                >
+                  View details
+                </a>
+              )}
+            </div>
           </div>
+          {/* <div className="mt-4 flex flex-wrap gap-2">
+          </div> */}
           <p className="mt-2 text-[10px] text-neutral-400">
             {isSelf ? "You" : senderName} · {timeLabel}
           </p>
@@ -217,9 +262,9 @@ const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite })
     const shared = message.sharedEntry;
     return (
       <div
-        className={`group flex gap-3 ${isSelf ? "justify-end" : "justify-start"} ${
-          isSequence ? "mt-1" : "mt-4"
-        }`}
+        className={`group flex gap-3 ${
+          isSelf ? "justify-end" : "justify-start"
+        } ${isSequence ? "mt-1" : "mt-4"}`}
       >
         <div className={showAvatar ? "" : "w-10"}>
           {showAvatar && <AvatarPlaceholder>{avatarContent}</AvatarPlaceholder>}
@@ -227,15 +272,19 @@ const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite })
         <div className="max-w-xl rounded-2xl border border-orange-100 bg-white px-4 py-4 text-sm shadow">
           <div className="flex items-center justify-between">
             <div>
-          {!isSelf && !isSequence && (
-            <p className="text-xs font-semibold text-neutral-700">{senderName}</p>
-          )}
-          <p className="text-sm font-bold text-neutral-900">{shared.businessName}</p>
-          <p className="text-xs text-neutral-500">
-            {shared.neighborhood || shared.meta?.address || "Shared spot"}
-          </p>
-        </div>
-      </div>
+              {!isSelf && !isSequence && (
+                <p className="text-xs font-semibold text-neutral-700">
+                  {senderName}
+                </p>
+              )}
+              <p className="text-sm font-bold text-neutral-900">
+                {shared.businessName}
+              </p>
+              <p className="text-xs text-neutral-500">
+                {shared.neighborhood || shared.meta?.address || "Shared spot"}
+              </p>
+            </div>
+          </div>
           {shared.meta?.image && (
             <div className="mt-3 h-40 w-full overflow-hidden rounded-2xl bg-gray-100">
               <img
@@ -288,14 +337,12 @@ const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite })
 
   return (
     <div
-      className={`group flex gap-3 ${isSelf ? "justify-end" : "justify-start"} ${
-        isSequence ? "mt-1" : "mt-4"
-      }`}
+      className={`group flex gap-3 ${
+        isSelf ? "justify-end" : "justify-start"
+      } ${isSequence ? "mt-1" : "mt-4"}`}
     >
       <div className={showAvatar ? "" : "w-10"}>
-        {showAvatar && (
-          <AvatarPlaceholder>{avatarContent}</AvatarPlaceholder>
-        )}
+        {showAvatar && <AvatarPlaceholder>{avatarContent}</AvatarPlaceholder>}
       </div>
       <div
         className={`max-w-xl rounded-2xl px-4 py-3 text-sm shadow ${
@@ -310,7 +357,11 @@ const MessageBubble = ({ message, isSequence, onSendInvite, onRespondToInvite })
         <p className={isSelf ? "text-neutral-50" : "text-neutral-800"}>
           {message.content}
         </p>
-        <p className={`mt-1 text-[10px] ${isSelf ? "text-neutral-300" : "text-neutral-500"}`}>
+        <p
+          className={`mt-1 text-[10px] ${
+            isSelf ? "text-neutral-300" : "text-neutral-500"
+          }`}
+        >
           {isSelf ? "You" : senderName} · {timeLabel}
         </p>
       </div>

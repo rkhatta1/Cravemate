@@ -52,6 +52,7 @@ model User {
   hasFinishedOnboarding Boolean            @default(false)
   accounts              Account[]
   memberships           GroupMember[]
+  inviteAcceptances     InviteAcceptance[]
   leaderboards          Leaderboard[]
   LeaderboardMatch      LeaderboardMatch[]
   messages              Message[]
@@ -71,8 +72,10 @@ model Group {
   name            String
   locationContext String
   groupContext    Json?
+  yelpChatId      String?
   createdAt       DateTime      @default(now())
   members         GroupMember[]
+  inviteAcceptances InviteAcceptance[]
   messages        Message[]
 }
 
@@ -99,6 +102,21 @@ model Message {
   group          Group             @relation(fields: [groupId], references: [id])
   sender         User?             @relation(fields: [senderId], references: [id])
   sharedEntry    LeaderboardEntry? @relation("SharedEntry", fields: [sharedEntryId], references: [id])
+  inviteAcceptances InviteAcceptance[]
+}
+
+model InviteAcceptance {
+  id              String   @id @default(cuid())
+  groupId          String
+  userId           String
+  inviteMessageId  String
+  acceptedAt       DateTime @default(now())
+  group            Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inviteMessage    Message  @relation(fields: [inviteMessageId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@unique([inviteMessageId, userId])
 }
 
 model Leaderboard {

@@ -19,22 +19,22 @@ const YelpCard = ({ business, onSendInvite }) => {
       {business.address && (
         <p className="mt-1 text-xs text-neutral-500">{business.address}</p>
       )}
-      <div className="mt-3 flex flex-wrap gap-2">
-        {business.url && (
-          <a
-            href={business.url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex text-xs font-semibold text-yelp-red hover:text-yelp-dark"
-          >
-            View on Yelp →
-          </a>
-        )}
+      <div className="mt-3 items-center flex gap-2">
         <SendInviteButton
           size="sm"
           onClick={() => onSendInvite?.(business)}
           disabled={!onSendInvite}
-        />
+          />
+          {business.url && (
+            <a
+              href={business.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex text-xs font-semibold text-yelp-red hover:text-yelp-dark"
+            >
+              View on Yelp →
+            </a>
+          )}
       </div>
     </div>
   );

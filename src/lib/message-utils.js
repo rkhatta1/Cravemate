@@ -27,8 +27,11 @@ export const getMessagePreview = (message, limit = 80) => {
       const parsed = JSON.parse(message.content);
       if (parsed?.type === "dining-invite") {
         const inviteName = parsed.restaurant?.name || "Group invite";
-        const inviteDate = parsed.schedule?.date
-          ? new Date(`${parsed.schedule.date}T00:00:00`).toLocaleDateString(undefined, {
+        const inviteDateValue =
+          parsed.schedule?.datetime ||
+          (parsed.schedule?.date ? `${parsed.schedule.date}T00:00:00` : "");
+        const inviteDate = inviteDateValue
+          ? new Date(inviteDateValue).toLocaleDateString(undefined, {
               month: "short",
               day: "numeric",
             })
