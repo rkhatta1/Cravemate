@@ -11,8 +11,12 @@ export default function handler(req, res) {
     return res.status(500).end();
   }
 
-  if (!res.socket.server.io) {
-    getOrCreateIO(res.socket.server);
+  try {
+    if (!res.socket.server.io) {
+      res.socket.server.io = getOrCreateIO(res.socket.server);
+    }
+  } catch (error) {
+    console.warn("Socket.io init failed", error);
   }
 
   res.end();
