@@ -14,7 +14,7 @@ const Header = ({ onSignIn, isLoading }) => {
 
           <div className="hidden md:flex items-center space-x-6">
             <nav className="flex group space-x-2 text-sm font-medium text-gray-600 cursor-pointer">
-              <p className="group-hover:text-black transition-colors">Powered by</p>
+              <a href="https://docs.developer.yelp.com/" target='_blank' className="group-hover:text-black transition-colors">Powered by</a>
               <a href="https://docs.developer.yelp.com/" target='_blank' className="flex gap-2 text-md group-hover:text-black transition-colors">&#123;<span className='-ml-[0.35rem]'><FaYelp /></span> API &#125;</a>
             </nav>
             <div className="flex items-center gap-3 pl-6 border-l border-gray-200">
