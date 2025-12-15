@@ -7,6 +7,7 @@ import Header from "@/components/landing/Header";
 import Hero from "@/components/landing/Hero";
 import SocialProof from "@/components/landing/SocialProof";
 import FloatingElements from "@/components/landing/FloatingElements";
+import Features from "@/components/landing/Features";
 import { X } from "lucide-react";
 
 export default function LandingPage() {
@@ -101,12 +102,13 @@ export default function LandingPage() {
         <div className="relative z-10 -mt-8 mb-0">
           <FloatingElements />
         </div>
-        <SocialProof />
+        {/* <SocialProof /> */}
+        <Features onSignIn={handleCTAClick} isLoading={isLoading} />
 
         {/* Footer placeholder */}
         <footer className="bg-neutral-50 py-12 border-t border-gray-100">
-          <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500">
-            <div>© 2024 Cravemate Inc.</div>
+          <div className="max-w-7xl mx-auto px-4 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500">
+            <div>Cravemate, innit?</div>
             <div className="flex gap-6 mt-4 md:mt-0">
               <a href="#" className="hover:text-black">
                 Privacy
@@ -114,8 +116,8 @@ export default function LandingPage() {
               <a href="#" className="hover:text-black">
                 Terms
               </a>
-              <a href="#" className="hover:text-black">
-                Twitter
+              <a href="https://github.com/rkhatta1/Cravemate" target="_blank" className="hover:text-black">
+                GitHub
               </a>
             </div>
           </div>

@@ -61,10 +61,10 @@ const FloatingElements = () => {
   return (
     <div className="w-full justify-center items-center overflow-hidden bg-gradient-to-b from-white to-gray-50">
     <div className="relative mx-auto max-w-[75%] h-[600px] overflow-hidden perspective-[2000px]">
-      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] bg-size-[16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30"></div>
 
       {/* Central App Card */}
-      <div className="absolute left-[40%] top-20 -translate-x-1/2 z-20 hover:z-30 transition-all duration-500 animate-float">
+      <div className="absolute left-[39%] top-20 -translate-x-1/2 z-20 hover:z-30 transition-all duration-[5s] animate-float">
         <AppCard rotation="rotateX(10deg) rotateY(-5deg) rotateZ(2deg)" />
       </div>
 
@@ -74,7 +74,7 @@ const FloatingElements = () => {
         name="Sarah" 
         time="12:03 PM"
         message={<span>We need a place with vegan options! 🌱</span>}
-        className="top-32 left-[10%] lg:left-[20%] animate-float-delayed"
+        className="top-32 left-[10%] lg:left-[19%] animate-float-delayed duration-[5s]"
         rotation="rotate(-5deg) translateZ(50px)"
       />
 
@@ -83,7 +83,7 @@ const FloatingElements = () => {
         name="Mike" 
         time="12:04 PM"
         message={<span><span className="text-yelp-red font-bold">@yelp</span> Find us somewhere cool in SoHo suitable for 6 people.</span>}
-        className="top-80 left-[5%] lg:left-[15%] z-30"
+        className="top-80 left-[5%] lg:left-[15%] z-30 duration-[5s] animate-float"
         rotation="rotate(3deg) translateZ(100px)"
       />
 
@@ -93,7 +93,7 @@ const FloatingElements = () => {
         name="Jessica" 
         time="12:05 PM"
         message={<span>I'm craving spicy food today 🌶️</span>}
-        className="top-40 right-[10%] lg:right-[20%] animate-float-delayed"
+        className="top-40 right-[10%] lg:right-[18%] duration-[5s] animate-float-delayed"
         rotation="rotate(6deg) translateZ(-20px)"
       />
 

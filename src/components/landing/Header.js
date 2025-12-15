@@ -1,6 +1,7 @@
 import React from 'react';
 import { CravemateLogo } from './Icons';
 import GoogleSignInButton from './GoogleSignInButton';
+import { FaYelp } from "react-icons/fa";
 
 const Header = ({ onSignIn, isLoading }) => {
   return (
@@ -11,11 +12,10 @@ const Header = ({ onSignIn, isLoading }) => {
             <CravemateLogo />
           </div>
 
-          <div className="hidden md:flex items-center space-x-8">
-            <nav className="flex space-x-6 text-sm font-medium text-gray-600">
-              <a href="#" className="hover:text-black transition-colors">How it works</a>
-              <a href="#" className="hover:text-black transition-colors">Features</a>
-              <a href="#" className="hover:text-black transition-colors">Pricing</a>
+          <div className="hidden md:flex items-center space-x-6">
+            <nav className="flex group space-x-2 text-sm font-medium text-gray-600 cursor-pointer">
+              <p className="group-hover:text-black transition-colors">Powered by</p>
+              <a href="https://docs.developer.yelp.com/" target='_blank' className="flex gap-2 text-md group-hover:text-black transition-colors">&#123;<span className='-ml-[0.35rem]'><FaYelp /></span> API &#125;</a>
             </nav>
             <div className="flex items-center gap-3 pl-6 border-l border-gray-200">
                <GoogleSignInButton onClick={onSignIn} variant="dark" text="Get Started" className="py-2 px-4 text-sm" isLoading={isLoading} />

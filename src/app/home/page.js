@@ -142,68 +142,6 @@ export default function HomePage() {
     groupIds,
   });
 
-  const refreshGroups = useCallback(async () => {
-    try {
-      const response = await fetch("/api/groups", { cache: "no-store" });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error || "Failed to refresh chats");
-
-      const fetched = Array.isArray(payload.groups) ? payload.groups : [];
-      setGroups((prev) => {
-        if (!prev?.length) return fetched;
-        const prevById = new Map(prev.map((g) => [g.id, g]));
-        let changed = false;
-        const next = fetched.map((g) => {
-          const existing = prevById.get(g.id);
-          if (!existing) {
-            changed = true;
-            return g;
-          }
-          const prevLast = existing.messages?.[existing.messages.length - 1]?.id || "";
-          const nextLast = g.messages?.[g.messages.length - 1]?.id || "";
-          if (prevLast !== nextLast || (existing.messages?.length || 0) !== (g.messages?.length || 0)) {
-            changed = true;
-            return g;
-          }
-          if (
-            (existing.pinnedInvite?.inviteMessageId || "") !== (g.pinnedInvite?.inviteMessageId || "") ||
-            (existing.acceptedInviteMessageId || "") !== (g.acceptedInviteMessageId || "")
-          ) {
-            changed = true;
-            return { ...existing, ...g };
-          }
-          return existing;
-        });
-
-        if (changed) {
-          try {
-            localStorage.setItem(GROUPS_CACHE_KEY, JSON.stringify(next));
-          } catch {}
-          return next;
-        }
-        return prev;
-      });
-    } catch (error) {
-      console.warn("Group refresh failed", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (status !== "authenticated") return;
-    let interval = null;
-
-    const tick = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      refreshGroups();
-    };
-
-    // Poll as a fallback (Vercel serverless websockets are unreliable).
-    interval = setInterval(tick, 3500);
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [status, refreshGroups]);
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {

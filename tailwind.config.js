@@ -29,6 +29,10 @@ module.exports = {
         float: {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-20px)' },
+        },
+        width: {
+                '0%': { width: '0%' },
+                '100%': { width: '100%' },
         }
       }
     },
