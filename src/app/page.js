@@ -110,12 +110,12 @@ export default function LandingPage() {
           <div className="max-w-7xl mx-auto px-4 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500">
             <div>Cravemate, innit?</div>
             <div className="flex gap-6 mt-4 md:mt-0">
-              <a href="#" className="hover:text-black">
+              {/* <a href="#" className="hover:text-black">
                 Privacy
               </a>
               <a href="#" className="hover:text-black">
                 Terms
-              </a>
+              </a> */}
               <a href="https://github.com/rkhatta1/Cravemate" target="_blank" className="hover:text-black">
                 GitHub
               </a>
