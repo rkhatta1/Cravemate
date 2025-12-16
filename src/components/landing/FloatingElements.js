@@ -37,7 +37,7 @@ const AppCard = ({ className, rotation }) => (
     </div>
     <div className="p-4">
       <div className="h-32 bg-gray-100 rounded-xl mb-4 overflow-hidden relative">
-        <img src="https://picsum.photos/400/300?food=tacos" alt="Food" className="w-full h-full object-cover" />
+        <img src="/tacos-landing.jpg" alt="Food" className="w-full h-full object-cover" />
         <div className="absolute bottom-2 right-2 bg-white px-2 py-1 rounded-md text-xs font-bold shadow-sm flex items-center gap-1">
           <Star size={10} className="text-yellow-400" fill="#facc15" /> 4.9
         </div>

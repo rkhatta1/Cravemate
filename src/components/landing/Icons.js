@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 
 export const GoogleIcon = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -9,24 +10,15 @@ export const GoogleIcon = ({ className }) => (
   </svg>
 );
 
+const logoPath = '/Cravemate-Logo.svg';
+
 export const CravemateLogo = ({ className }) => (
   <div className={`flex items-center justify-center font-bold text-xl tracking-tight ${className}`}>
-    <div className="w-8 h-8 bg-black text-white flex items-center justify-center rounded-md mr-2">
-      <span className="text-lg">C</span>
-    </div>
-    Cravemate
-  </div>
-);
-
-export const ProductHuntBadge = () => (
-  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-red-100 rounded-lg shadow-sm mb-8 hover:border-red-200 transition-colors cursor-pointer group">
-    <div className="w-6 h-6 rounded-full bg-[#FF6154] text-white flex items-center justify-center font-bold text-xs">P</div>
-    <div className="flex flex-col items-start leading-none">
-      <span className="text-[10px] font-semibold text-red-500 uppercase tracking-wide group-hover:text-red-600">Featured on</span>
-      <span className="text-sm font-bold text-gray-900">Product Hunt</span>
-    </div>
-    <div className="ml-2 text-xs font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-      ▲ 988
-    </div>
+    <Image 
+      src={logoPath}
+      alt='Cravemate'
+      width={42}
+      height={42}
+    />
   </div>
 );
